@@ -1,0 +1,6 @@
+{
+  "name": "SafeRoute AI",
+  "description": "Intelligent navigation and urban mobility platform evaluating routes by travel efficiency and comprehensive safety scores.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

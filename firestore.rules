@@ -1,0 +1,94 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Helper Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Default Deny Catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 1. User Profile Collection (/users/{userId})
+    // Protects user profile data so users only access and modify their own document.
+    function isValidUserProfile(data) {
+      return data.email is string && data.email.size() <= 150
+        && (!('name' in data) || (data.name is string && data.name.size() <= 100))
+        && (!('createdAt' in data) || data.createdAt is number);
+    }
+
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming());
+      allow update: if isOwner(userId) && isValidId(userId) && isValidUserProfile(incoming());
+      allow delete: if false;
+    }
+
+    // 2. Community Hazard Reports (/reports/{reportId})
+    // Public read access for urban commuter visibility; only authenticated users can submit.
+    function isValidReport(data) {
+      return data.userId is string && data.userId == request.auth.uid
+        && data.category in ['Poor Lighting', 'Road Damage', 'Reported Incident', 'Isolated Area', 'Heavy Crowd', 'Other']
+        && data.description is string && data.description.size() <= 1000
+        && data.latitude is number && data.latitude >= -90.0 && data.latitude <= 90.0
+        && data.longitude is number && data.longitude >= -180.0 && data.longitude <= 180.0
+        && data.timestamp is number
+        && data.status in ['Reported', 'Under Review', 'Community Confirmed', 'Verified']
+        && data.confirmations is number && data.confirmations >= 0;
+    }
+
+    match /reports/{reportId} {
+      allow get, list: if true;
+      allow create: if isSignedIn() && isValidId(reportId) && isValidReport(incoming());
+      allow update: if isSignedIn() && isValidId(reportId) && (
+        // Action: Community Confirmation (increment confirmations and advance status)
+        incoming().diff(existing()).affectedKeys().hasOnly(['confirmations', 'status'])
+        // Action: Owner edit
+        || (existing().userId == request.auth.uid && isValidReport(incoming()))
+      );
+      allow delete: if isSignedIn() && existing().userId == request.auth.uid;
+    }
+
+    // 3. Saved Routes (/savedRoutes/{routeId})
+    // Strictly private to the owner who saved the route.
+    function isValidSavedRoute(data) {
+      return data.userId is string && data.userId == request.auth.uid
+        && data.source is string && data.source.size() <= 255
+        && data.destination is string && data.destination.size() <= 255
+        && data.travelMode is string
+        && data.routePreference is string
+        && data.distance is string && data.distance.size() <= 50
+        && data.duration is string && data.duration.size() <= 50
+        && data.safetyScore is number && data.safetyScore >= 0 && data.safetyScore <= 100
+        && data.createdAt is number;
+    }
+
+    match /savedRoutes/{routeId} {
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(routeId) && isValidSavedRoute(incoming());
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid && isValidSavedRoute(incoming());
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+  }
+}
