@@ -41,6 +41,11 @@ import { AuthModal } from './components/AuthModal';
 import { SafetyMethodologyModal } from './components/SafetyMethodologyModal';
 import { CommunityFeedView } from './components/CommunityFeedView';
 import { LocationCalibrationModal } from './components/LocationCalibrationModal';
+import { SidebarRail } from './components/SidebarRail';
+import { CourierRoutesPanel } from './components/CourierRoutesPanel';
+import { FloatingBottomDock } from './components/FloatingBottomDock';
+import { FloatingMapHeader } from './components/FloatingMapHeader';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { AlertCircle, ShieldCheck } from 'lucide-react';
 
 const GPS_TRACKING_OPTIONS: PositionOptions = {
@@ -50,8 +55,33 @@ const GPS_TRACKING_OPTIONS: PositionOptions = {
 };
 
 export default function App() {
-  // Navigation tabs: default directly to 'planner' so the map and route tools are immediately accessible
-  const [activeTab, setActiveTab] = useState<'planner' | 'landing' | 'community'>('planner');
+  // Theme state: light by default (matching the Scandinavian courier mockup) or persisted
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const saved = localStorage.getItem('saferoute_theme');
+    return (saved === 'dark' || saved === 'light') ? saved : 'light';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('saferoute_theme', theme);
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
+      document.body.classList.add('dark');
+      document.body.classList.remove('light');
+    } else {
+      document.documentElement.classList.add('light');
+      document.documentElement.classList.remove('dark');
+      document.body.classList.add('light');
+      document.body.classList.remove('dark');
+    }
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+  };
+
+  // Navigation tabs: default directly to 'planner'
+  const [activeTab, setActiveTab] = useState<'planner' | 'landing' | 'community' | 'reports' | 'saved'>('planner');
 
   // Auth state
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -61,20 +91,11 @@ export default function App() {
   // 1. Current GPS Location: retrieved directly from browser geolocation API
   // 2. Origin: user's manual selection OR explicit "Use My Current Location"
   // 3. Destination: user's manual destination selection
-  const [sourceText, setSourceText] = useState('Victoria Memorial, Kolkata');
-  const [originLocation, setOriginLocation] = useState<{ name: string; lat: number; lng: number; isCurrentLocation?: boolean } | null>({
-    name: 'Victoria Memorial, Kolkata',
-    lat: 22.5448,
-    lng: 88.3426,
-    isCurrentLocation: false
-  });
+  const [sourceText, setSourceText] = useState('');
+  const [originLocation, setOriginLocation] = useState<{ name: string; lat: number; lng: number; isCurrentLocation?: boolean } | null>(null);
 
-  const [destText, setDestText] = useState('Howrah Station, Kolkata');
-  const [destLocation, setDestLocation] = useState<{ name: string; lat: number; lng: number } | null>({
-    name: 'Howrah Station, Kolkata',
-    lat: 22.5839,
-    lng: 88.3430
-  });
+  const [destText, setDestText] = useState('');
+  const [destLocation, setDestLocation] = useState<{ name: string; lat: number; lng: number } | null>(null);
 
   // Coordinates derived for Map rendering (memoized to prevent referential churn in dependencies)
   const sourceCoords = React.useMemo(() => {
@@ -91,6 +112,7 @@ export default function App() {
   // Route calculation & selection
   const [routes, setRoutes] = useState<RouteOption[]>([]);
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
+  const [hoveredRouteId, setHoveredRouteId] = useState<string | null>(null);
   const [isLoadingRoutes, setIsLoadingRoutes] = useState(false);
   const [routeError, setRouteError] = useState<string | null>(null);
 
@@ -459,13 +481,6 @@ export default function App() {
     }
   };
 
-  // Run initial route calculation on mount so map displays default route
-  useEffect(() => {
-    if (routes.length === 0 && originLocation && destLocation) {
-      handleFindSafeRoutes(originLocation, destLocation);
-    }
-  }, []);
-
   // When Travel Mode changes, immediately re-calculate routes with the new profile!
   const handleTravelModeChange = (newMode: TravelMode) => {
     setTravelMode(newMode);
@@ -802,68 +817,72 @@ export default function App() {
     : false;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-      {/* Top Navigation */}
-      <Navbar
+    <div className={`h-screen w-screen flex flex-row overflow-hidden font-sans transition-colors duration-200 ${
+      theme === 'light' ? 'bg-[#f1f5f9] text-slate-900' : 'bg-[#090d16] text-slate-100'
+    }`}>
+      {/* Left Icon Rail */}
+      <SidebarRail
+        activeTab={activeTab === 'community' ? 'reports' : (activeTab as any)}
+        setActiveTab={(t) => {
+          if (t === 'saved') {
+            setIsSavedRoutesOpen(true);
+          } else if (t === 'reports') {
+            setActiveTab('community');
+          } else {
+            setActiveTab('planner');
+          }
+        }}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        onOpenCalibrationModal={() => setIsCalibrationModalOpen(true)}
+        onOpenMethodology={() => setIsMethodologyOpen(true)}
         currentUser={currentUser}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
         onOpenAuth={() => setIsAuthModalOpen(true)}
         onLogout={logoutUser}
-        onOpenSavedRoutes={() => setIsSavedRoutesOpen(true)}
-        onOpenMethodology={() => setIsMethodologyOpen(true)}
-        onOpenReportModal={() => {
-          setPinReportCoords(sourceCoords || { lat: 22.5448, lng: 88.3426 });
-          setIsReportModalOpen(true);
-        }}
         savedRoutesCount={savedRoutes.length}
+        isCalibrated={isCalibrated}
       />
 
-      {/* Main Content Area */}
-      <main className="flex-1 flex flex-col">
-        {activeTab === 'landing' ? (
-          <LandingHero
-            onStartPlanning={() => {
-              setActiveTab('planner');
-              if (routes.length === 0) {
-                handleFindSafeRoutes();
-              }
-            }}
-            onQuickRouteSelect={handleQuickRouteSelect}
-          />
-        ) : activeTab === 'community' ? (
-          <CommunityFeedView
-            reports={reports}
-            onConfirmReport={handleConfirmReport}
-            onOpenSubmitModal={() => {
-              setPinReportCoords(sourceCoords || { lat: 22.5448, lng: 88.3426 });
-              setIsReportModalOpen(true);
-            }}
-            onFocusReportOnMap={(rep) => {
-              setActiveTab('planner');
-              setOriginLocation({
-                name: rep.category + ' Hazard',
-                lat: rep.latitude,
-                lng: rep.longitude,
-                isCurrentLocation: false
-              });
-              setSourceText(rep.category + ' Hazard');
-            }}
-          />
+      {/* Main Workspace Area */}
+      <main className="flex-1 flex flex-col h-full overflow-hidden relative">
+        {activeTab === 'community' ? (
+          <div className="flex-1 h-full overflow-y-auto p-4 sm:p-6">
+            <CommunityFeedView
+              reports={reports}
+              onConfirmReport={handleConfirmReport}
+              onOpenSubmitModal={() => {
+                setPinReportCoords(sourceCoords || { lat: 59.3293, lng: 18.0686 });
+                setIsReportModalOpen(true);
+              }}
+              onFocusReportOnMap={(rep) => {
+                setActiveTab('planner');
+                setOriginLocation({
+                  name: rep.category + ' Hazard',
+                  lat: rep.latitude,
+                  lng: rep.longitude,
+                  isCurrentLocation: false
+                });
+                setSourceText(rep.category + ' Hazard');
+              }}
+            />
+          </div>
         ) : (
-          /* Route Planner - Map & Safety Intelligence Interface */
-          <div className="flex-1 flex flex-col lg:flex-row h-[calc(100vh-61px)] overflow-hidden">
-            {/* Left Column: Route Search Form & Route Alternatives Cards (Hidden during active turn-by-turn navigation) */}
+          /* Scandinavian Courier Safe Route Explorer Layout */
+          <div className="flex-1 flex flex-col lg:flex-row h-full overflow-hidden relative">
+            {/* Left Floating Card Panel (Hidden during active turn-by-turn navigation) */}
             {!isNavigating && (
-              <div
-                className="w-full lg:w-[380px] xl:w-[420px] border-r border-white/[0.08] bg-[#050814]/95 backdrop-blur-xl flex flex-col h-auto lg:h-full shrink-0 overflow-y-auto p-4 space-y-4 shadow-xl z-20"
-              >
-                {/* Route Search Form */}
-                <RouteSearchForm
+              <ErrorBoundary fallbackTitle="Safe Corridors Panel">
+                <CourierRoutesPanel
+                  routes={routes}
+                  selectedRouteId={selectedRouteId}
+                  onSelectRoute={handleSelectRoute}
+                  hoveredRouteId={hoveredRouteId}
+                  onHoverRoute={setHoveredRouteId}
                   sourceText={sourceText}
                   setSourceText={handleSourceTextChange}
                   destText={destText}
                   setDestText={handleDestTextChange}
+                  currentGpsCoords={currentGpsLocation ? { lat: currentGpsLocation.latitude, lng: currentGpsLocation.longitude } : null}
                   travelMode={travelMode}
                   setTravelMode={handleTravelModeChange}
                   preference={preference}
@@ -872,63 +891,40 @@ export default function App() {
                   isLoading={isLoadingRoutes}
                   onUseCurrentLocation={handleUseCurrentLocation}
                   onSwap={handleSwapLocations}
-                  onSelectSourceSuggestion={(item) => handleSourceTextChange(item)}
-                  onSelectDestSuggestion={(item) => handleDestTextChange(item)}
                   isCalibrated={isCalibrated}
                   isEstimatedIsp={isEstimatedIsp}
                   isLocked={isLocked}
                   onOpenCalibrationModal={() => setIsCalibrationModalOpen(true)}
-                  onLockLocation={lockCurrentLocation}
-                  onUnlockLocation={clearCalibratedLocation}
+                  theme={theme}
+                  aiExplanation={aiExplanation?.summary || null}
+                  isAiLoading={isAiLoading}
+                  onStartNavigation={handleStartNavigation}
+                  onSaveCurrentRoute={handleSaveRoute}
+                  isSaved={isCurrentRouteSaved}
+                  savedRoutes={savedRoutes}
+                  onSelectSavedRoute={handleLoadSavedRoute}
                 />
-
-                {/* Route Error Notification */}
-                {routeError && (
-                  <div className="bg-rose-950/60 border border-rose-500/50 rounded-xl p-3 text-xs text-rose-300 flex items-start gap-2 shadow-lg">
-                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                    <span>{routeError}</span>
-                  </div>
-                )}
-
-                {/* Save Route Success Feedback */}
-                {saveRouteSuccess && (
-                  <div className="bg-cyan-950/80 border border-cyan-500/60 text-cyan-200 rounded-xl p-3 text-xs flex items-center gap-2 shadow-lg animate-fade-in font-medium">
-                    <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-                    <span>{saveRouteSuccess}</span>
-                  </div>
-                )}
-
-                {/* Evaluated Route Alternatives List */}
-                {routes.length > 0 ? (
-                  <RouteCardsList
-                    routes={routes}
-                    selectedRouteId={selectedRouteId}
-                    onSelectRoute={handleSelectRoute}
-                  />
-                ) : (
-                  <div className="glass-card rounded-2xl p-4 text-center text-slate-400 space-y-2 border border-white/[0.06]">
-                    <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 flex items-center justify-center mx-auto shadow-sm">
-                      <ShieldCheck className="w-5 h-5" />
-                    </div>
-                    <div className="text-xs font-bold text-slate-200">Ready to Calculate Safety Corridors</div>
-                    <p className="text-[11px] text-slate-400 font-light leading-relaxed">
-                      Enter any origin and destination above to compare live safety ratings out of 100 with street-level telemetry.
-                    </p>
-                  </div>
-                )}
-              </div>
+              </ErrorBoundary>
             )}
 
-            {/* Right Main Area: Map Stage + Safety Detail Analytics */}
-            <div className={`flex-1 flex flex-col h-full ${isNavigating ? 'overflow-hidden' : 'overflow-y-auto'} bg-[#050814]`}>
-              {/* Map Stage: Fullscreen in navigation mode, standard split view otherwise */}
-              <div
-                className={`w-full relative overflow-hidden transition-all duration-300 ${
-                  isNavigating
-                    ? 'flex-1 h-full min-h-0 z-10'
-                    : 'h-[360px] sm:h-[400px] lg:h-[48vh] xl:h-[50vh] shrink-0 border-b border-white/[0.08] shadow-lg'
-                }`}
-              >
+            {/* Right Map Canvas & HUD Overlays */}
+            <div className="flex-1 h-full relative overflow-hidden flex flex-col">
+              {/* Floating Map Top Header */}
+              <FloatingMapHeader
+                theme={theme}
+                onToggleTheme={toggleTheme}
+                onOpenReportModal={() => {
+                  setPinReportCoords(sourceCoords || { lat: 59.3293, lng: 18.0686 });
+                  setIsReportModalOpen(true);
+                }}
+                onOpenCalibrationModal={() => setIsCalibrationModalOpen(true)}
+                isCalibrated={isCalibrated}
+                destinationName={destText}
+                isNavigating={isNavigating}
+              />
+
+              {/* Interactive Map */}
+              <div className="w-full h-full relative flex-1">
                 <MapComponent
                   sourceCoords={sourceCoords}
                   destCoords={destCoords}
@@ -953,14 +949,30 @@ export default function App() {
                   isPinpointCalibrationMode={isPinpointCalibrationMode}
                   onCalibrateMapClick={handleCalibrateMapClick}
                   onOpenCalibrationModal={() => setIsCalibrationModalOpen(true)}
-                  onClearCalibration={handleClearCalibration}
-                  onCancelPinpointMode={() => setIsPinpointCalibrationMode(false)}
+                  onCancelCalibrationMode={() => setIsPinpointCalibrationMode(false)}
                   onLockLocation={lockCurrentLocation}
                   onUnlockLocation={clearCalibratedLocation}
                   isLocked={isLocked}
+                  theme={theme}
+                  destinationName={destText}
+                  hoveredRouteId={hoveredRouteId}
                 />
 
-                {/* Live Navigation Overlay & HUD */}
+                {/* Floating Bottom Telemetry Dock (Over map, hidden in navigation mode) */}
+                {!isNavigating && selectedRoute && (
+                  <FloatingBottomDock
+                    route={selectedRoute}
+                    sourceText={sourceText}
+                    destText={destText}
+                    currentGpsLocation={currentGpsLocation}
+                    isCalibrated={isCalibrated}
+                    onStartNavigation={handleStartNavigation}
+                    theme={theme}
+                    onOpenCalibrationModal={() => setIsCalibrationModalOpen(true)}
+                  />
+                )}
+
+                {/* Live Turn-by-Turn Navigation Overlay & HUD */}
                 {isNavigating && selectedRoute && (
                   <NavigationOverlay
                     route={selectedRoute}
@@ -974,35 +986,10 @@ export default function App() {
                     onRecalculateRoute={() => handleRecalculateRoute()}
                     isRecalculating={isRecalculatingNavRoute}
                     onSimulateMove={handleSimulateMove}
+                    reports={reports}
                   />
                 )}
               </div>
-
-              {/* Bottom Wide Section: Full-Width Safety Factor Breakdown (Hidden during active navigation) */}
-              {!isNavigating && (
-                <div className="p-4 sm:p-6 w-full max-w-7xl mx-auto space-y-5">
-                  {selectedRoute ? (
-                    <SafetyDetailPanel
-                      route={selectedRoute}
-                      travelMode={travelMode}
-                      preference={preference}
-                      aiExplanation={aiExplanation}
-                      isAiLoading={isAiLoading}
-                      onRefreshAi={() => fetchAiForRoute(selectedRoute, routes, travelMode, preference)}
-                      onSaveRoute={handleSaveRoute}
-                      isRouteSaved={isCurrentRouteSaved}
-                      onOpenMethodology={() => setIsMethodologyOpen(true)}
-                      onStartNavigation={handleStartNavigation}
-                    />
-                  ) : (
-                    <SafetyOverviewCard
-                      reports={reports}
-                      onSelectQuickRoute={handleQuickRouteSelect}
-                      onOpenMethodology={() => setIsMethodologyOpen(true)}
-                    />
-                  )}
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -1045,12 +1032,10 @@ export default function App() {
       <LocationCalibrationModal
         isOpen={isCalibrationModalOpen}
         onClose={() => setIsCalibrationModalOpen(false)}
-        currentCoords={currentGpsLocation ? { lat: currentGpsLocation.latitude, lng: currentGpsLocation.longitude } : null}
-        isCalibrated={isCalibrated}
-        calibratedAddress={calibratedAddress}
+        currentGpsLocation={currentGpsLocation}
         onCalibrateLocation={handleCalibrateLocation}
-        onClearCalibration={handleClearCalibration}
-        onTriggerPinpointMode={() => {
+        onResetToGps={handleClearCalibration}
+        onEnableMapPinpointMode={() => {
           setIsCalibrationModalOpen(false);
           setIsPinpointCalibrationMode(true);
         }}

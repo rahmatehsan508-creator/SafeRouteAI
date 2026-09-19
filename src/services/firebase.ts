@@ -26,6 +26,7 @@ import {
   updateDoc,
   increment
 } from 'firebase/firestore';
+import { getStorage, ref, uploadBytes, getDownloadURL, FirebaseStorage } from 'firebase/storage';
 import { CommunityReport, SavedRoute } from '../types';
 import appletConfig from '../../firebase-applet-config.json';
 
@@ -49,6 +50,7 @@ if (getApps().length > 0) {
 
 export const auth: Auth = getAuth(app);
 export const db: Firestore = getFirestore(app, appletConfig.firestoreDatabaseId || '(default)');
+export const storage: FirebaseStorage = getStorage(app, firebaseConfig.storageBucket);
 
 // ==================== ERROR HANDLING ====================
 
@@ -172,7 +174,65 @@ export function subscribeToAuth(callback: (user: User | null) => void) {
   return onAuthStateChanged(auth, callback);
 }
 
-// ==================== COMMUNITY REPORTS ====================
+// ==================== COMMUNITY REPORTS & PHOTOS ====================
+
+/**
+ * Uploads a report image file to Firebase Storage with a compressed DataURL fallback
+ */
+export async function uploadReportPhoto(file: File, userId: string): Promise<string> {
+  const timestamp = Date.now();
+  const fileExt = file.name.split('.').pop() || 'jpg';
+  const storagePath = `reports/${userId}_${timestamp}.${fileExt}`;
+
+  try {
+    const imageRef = ref(storage, storagePath);
+    const snapshot = await uploadBytes(imageRef, file);
+    const downloadUrl = await getDownloadURL(snapshot.ref);
+    return downloadUrl;
+  } catch (storageError) {
+    console.warn('[Firebase Storage] Direct storage upload unavailable/failed. Compressing to data URL fallback...', storageError);
+
+    // Fallback: Read as compressed Base64 Data URL so photo upload works without strict bucket rules or CORS
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          // Scale down image max dimension to 800px for efficient Firestore storage
+          const maxDim = 800;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+            resolve(compressedDataUrl);
+          } else {
+            resolve(e.target?.result as string);
+          }
+        };
+        img.onerror = () => reject(new Error('Failed to load image for compression'));
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(file);
+    });
+  }
+}
 
 export async function submitCommunityReport(
   reportData: Omit<CommunityReport, 'id' | 'timestamp' | 'confirmations'>
@@ -181,7 +241,7 @@ export async function submitCommunityReport(
   const confirmations = 1;
   const path = 'reports';
 
-  const docPayload = {
+  const docPayload: any = {
     userId: reportData.userId,
     userName: reportData.userName || 'Community Contributor',
     category: reportData.category,
@@ -192,6 +252,10 @@ export async function submitCommunityReport(
     status: reportData.status || 'Reported',
     confirmations
   };
+
+  if (reportData.photoUrl) {
+    docPayload.photoUrl = reportData.photoUrl;
+  }
 
   try {
     // Actually call Firestore addDoc() to write directly to reports/{reportId}
@@ -228,7 +292,8 @@ export async function fetchCommunityReports(): Promise<CommunityReport[]> {
         longitude: Number(data.longitude),
         timestamp: data.timestamp || Date.now(),
         status: data.status || 'Reported',
-        confirmations: Number(data.confirmations) || 1
+        confirmations: Number(data.confirmations) || 1,
+        photoUrl: data.photoUrl || undefined
       });
     });
 

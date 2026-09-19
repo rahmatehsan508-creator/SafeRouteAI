@@ -54,7 +54,8 @@ service cloud.firestore {
         && data.longitude is number && data.longitude >= -180.0 && data.longitude <= 180.0
         && data.timestamp is number
         && data.status in ['Reported', 'Under Review', 'Community Confirmed', 'Verified']
-        && data.confirmations is number && data.confirmations >= 0;
+        && data.confirmations is number && data.confirmations >= 0
+        && (!('photoUrl' in data) || (data.photoUrl is string && data.photoUrl.size() <= 200000));
     }
 
     match /reports/{reportId} {

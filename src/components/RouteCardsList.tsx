@@ -6,12 +6,16 @@ interface RouteCardsListProps {
   routes: RouteOption[];
   selectedRouteId: string | null;
   onSelectRoute: (id: string) => void;
+  hoveredRouteId?: string | null;
+  onHoverRoute?: (id: string | null) => void;
 }
 
 export const RouteCardsList: React.FC<RouteCardsListProps> = ({
   routes,
   selectedRouteId,
-  onSelectRoute
+  onSelectRoute,
+  hoveredRouteId,
+  onHoverRoute
 }) => {
   if (routes.length === 0) {
     return (
@@ -63,10 +67,14 @@ export const RouteCardsList: React.FC<RouteCardsListProps> = ({
             <div
               key={route.id}
               onClick={() => onSelectRoute(route.id)}
+              onMouseEnter={() => onHoverRoute?.(route.id)}
+              onMouseLeave={() => onHoverRoute?.(null)}
               className={`p-4 rounded-2xl cursor-pointer transition-all duration-200 relative overflow-hidden ${
-                isSelected
-                  ? 'bg-[#0c152d]/90 backdrop-blur-2xl border-2 border-cyan-400/80 shadow-[0_0_30px_rgba(6,182,212,0.25)] scale-[1.01]'
-                  : 'glass-card hover:bg-[#0d1733]/70 hover:border-cyan-400/30'
+                hoveredRouteId === route.id
+                  ? 'bg-[#0c152d]/95 backdrop-blur-2xl border-2 border-cyan-400 shadow-[0_0_30px_rgba(6,182,212,0.4)] scale-[1.01]'
+                  : isSelected
+                    ? 'bg-[#0c152d]/90 backdrop-blur-2xl border-2 border-cyan-400/80 shadow-[0_0_30px_rgba(6,182,212,0.25)] scale-[1.01]'
+                    : 'glass-card hover:bg-[#0d1733]/70 hover:border-cyan-400/30'
               }`}
             >
               {/* Header: Preference Tag + Name */}

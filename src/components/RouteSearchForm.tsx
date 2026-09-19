@@ -143,7 +143,7 @@ export const RouteSearchForm: React.FC<RouteSearchFormProps> = ({
       <div className="space-y-3 relative z-10">
         {/* Source Field */}
         <div className="relative">
-          <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center justify-between">
+          <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5 flex items-center justify-between">
             <span>Origin / Starting Point</span>
             <div className="flex items-center gap-1.5">
               {isCalibrated || isLocked ? (
@@ -151,7 +151,7 @@ export const RouteSearchForm: React.FC<RouteSearchFormProps> = ({
                   <button
                     type="button"
                     onClick={onOpenCalibrationModal}
-                    className="text-[10px] text-emerald-400 hover:text-emerald-300 font-medium flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20 transition-all hover:scale-105"
+                    className="text-[10px] text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 font-medium flex items-center gap-1 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20 transition-all hover:scale-105"
                   >
                     <span>🎯 Locked Spot</span>
                     <span className="underline text-[9px]">Edit</span>
@@ -160,7 +160,7 @@ export const RouteSearchForm: React.FC<RouteSearchFormProps> = ({
                     <button
                       type="button"
                       onClick={onUnlockLocation}
-                      className="text-[9px] text-slate-400 hover:text-slate-200 bg-white/5 px-1.5 py-0.5 rounded border border-white/10"
+                      className="text-[9px] text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 bg-slate-100 dark:bg-white/5 px-1.5 py-0.5 rounded border border-slate-200 dark:border-white/10"
                       title="Unlock GPS"
                     >
                       Unlock
@@ -173,7 +173,7 @@ export const RouteSearchForm: React.FC<RouteSearchFormProps> = ({
                     <button
                       type="button"
                       onClick={onLockLocation}
-                      className="text-[10px] text-cyan-300 hover:text-white font-medium flex items-center gap-1 bg-cyan-500/15 hover:bg-cyan-500/30 px-2 py-0.5 rounded-md border border-cyan-500/30 transition-all hover:scale-105"
+                      className="text-[10px] text-cyan-700 dark:text-cyan-300 hover:text-cyan-900 dark:hover:text-white font-medium flex items-center gap-1 bg-cyan-500/15 hover:bg-cyan-500/30 px-2 py-0.5 rounded-md border border-cyan-500/30 transition-all hover:scale-105"
                       title="Lock current location so it won't fluctuate"
                     >
                       <span>🔒 Lock Spot</span>
@@ -183,7 +183,7 @@ export const RouteSearchForm: React.FC<RouteSearchFormProps> = ({
                     <button
                       type="button"
                       onClick={onOpenCalibrationModal}
-                      className="text-[10px] text-amber-400 hover:text-amber-300 font-medium flex items-center gap-1 bg-amber-500/15 px-2 py-0.5 rounded-md border border-amber-500/30 transition-all hover:scale-105 animate-pulse"
+                      className="text-[10px] text-amber-700 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-300 font-medium flex items-center gap-1 bg-amber-500/15 px-2 py-0.5 rounded-md border border-amber-500/30 transition-all hover:scale-105 animate-pulse"
                       title="Browser GPS is approximate (~15km ISP offset). Click to fix your exact spot."
                     >
                       <span>Fix Spot 🎯</span>
@@ -192,7 +192,7 @@ export const RouteSearchForm: React.FC<RouteSearchFormProps> = ({
                     <button
                       type="button"
                       onClick={onOpenCalibrationModal}
-                      className="text-[10px] text-cyan-400/90 hover:text-cyan-300 font-mono flex items-center gap-1 hover:underline"
+                      className="text-[10px] text-cyan-600 dark:text-cyan-400/90 hover:text-cyan-700 dark:hover:text-cyan-300 font-mono flex items-center gap-1 hover:underline"
                     >
                       <span>🎯 Calibrate</span>
                     </button>
@@ -202,7 +202,7 @@ export const RouteSearchForm: React.FC<RouteSearchFormProps> = ({
             </div>
           </label>
           <div className="relative flex items-center group">
-            <div className="absolute left-3.5 text-cyan-400 pointer-events-none transition-transform group-focus-within:scale-110">
+            <div className="absolute left-3.5 text-cyan-500 dark:text-cyan-400 pointer-events-none transition-transform group-focus-within:scale-110">
               <MapPin className="w-4 h-4" />
             </div>
             <input
@@ -214,13 +214,13 @@ export const RouteSearchForm: React.FC<RouteSearchFormProps> = ({
               }}
               onFocus={() => setActiveField('source')}
               placeholder="e.g. Victoria Memorial, Kolkata"
-              className="glass-input w-full rounded-xl pl-10 pr-11 py-2.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none"
+              className="glass-input w-full rounded-xl pl-10 pr-11 py-2.5 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none"
             />
             <button
               type="button"
               onClick={onUseCurrentLocation}
               title="Use current GPS location"
-              className="absolute right-2.5 p-1.5 text-slate-400 hover:text-cyan-300 hover:bg-cyan-500/10 rounded-lg transition-all"
+              className="absolute right-2.5 p-1.5 text-slate-500 dark:text-slate-400 hover:text-cyan-600 dark:hover:text-cyan-300 hover:bg-cyan-500/10 rounded-lg transition-all"
             >
               <Crosshair className="w-4 h-4" />
             </button>
@@ -229,7 +229,7 @@ export const RouteSearchForm: React.FC<RouteSearchFormProps> = ({
           {/* Source Autocomplete Dropdown */}
           {activeField === 'source' && (sourceSuggestions.length > 0 || sourceText.length === 0) && (
             <div className="absolute left-0 right-0 top-full mt-1.5 glass-panel-elevated rounded-xl shadow-2xl z-50 overflow-hidden py-1 border border-cyan-500/20">
-              <div className="px-3 py-1.5 text-[10px] uppercase font-bold text-slate-400 tracking-wider border-b border-white/[0.06]">
+              <div className="px-3 py-1.5 text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 tracking-wider border-b border-slate-200 dark:border-white/[0.06]">
                 {sourceSuggestions.length > 0 ? 'Address Suggestions' : 'Popular Origins'}
               </div>
               {(sourceSuggestions.length > 0 ? sourceSuggestions : POPULAR_PRESETS.slice(0, 3).map(p => p.label)).map((item, idx) => (
@@ -241,9 +241,9 @@ export const RouteSearchForm: React.FC<RouteSearchFormProps> = ({
                     setActiveField(null);
                     onSelectSourceSuggestion?.(item);
                   }}
-                  className="w-full text-left px-3.5 py-2.5 text-xs text-slate-200 hover:bg-cyan-500/15 hover:text-cyan-200 flex items-center gap-2.5 transition-colors border-b border-white/[0.04] last:border-b-0"
+                  className="w-full text-left px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 hover:bg-cyan-500/15 hover:text-cyan-700 dark:hover:text-cyan-200 flex items-center gap-2.5 transition-colors border-b border-slate-100 dark:border-white/[0.04] last:border-b-0"
                 >
-                  <MapPin className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                  <MapPin className="w-3.5 h-3.5 text-cyan-500 dark:text-cyan-400 shrink-0" />
                   <span className="truncate">{item}</span>
                 </button>
               ))}
@@ -257,7 +257,7 @@ export const RouteSearchForm: React.FC<RouteSearchFormProps> = ({
             type="button"
             onClick={handleSwap}
             title="Swap locations"
-            className="w-8 h-8 rounded-full bg-[#0c152d]/90 hover:bg-[#122045] border border-white/15 text-slate-300 hover:text-cyan-300 hover:border-cyan-400/40 backdrop-blur-md flex items-center justify-center transition-all duration-300 shadow-md hover:rotate-180 hover:scale-105"
+            className="w-8 h-8 rounded-full bg-slate-100 dark:bg-[#0c152d]/90 hover:bg-slate-200 dark:hover:bg-[#122045] border border-slate-300 dark:border-white/15 text-slate-700 dark:text-slate-300 hover:text-cyan-600 dark:hover:text-cyan-300 hover:border-cyan-400/40 backdrop-blur-md flex items-center justify-center transition-all duration-300 shadow-md hover:rotate-180 hover:scale-105"
           >
             <ArrowUpDown className="w-3.5 h-3.5" />
           </button>
@@ -265,12 +265,12 @@ export const RouteSearchForm: React.FC<RouteSearchFormProps> = ({
 
         {/* Destination Field */}
         <div className="relative">
-          <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5 flex items-center justify-between">
+          <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5 flex items-center justify-between">
             <span>Destination Point</span>
-            <span className="text-[10px] text-rose-400/90 font-mono">Safety Destination</span>
+            <span className="text-[10px] text-rose-600 dark:text-rose-400/90 font-mono">Safety Destination</span>
           </label>
           <div className="relative flex items-center group">
-            <div className="absolute left-3.5 text-rose-400 pointer-events-none transition-transform group-focus-within:scale-110">
+            <div className="absolute left-3.5 text-rose-500 dark:text-rose-400 pointer-events-none transition-transform group-focus-within:scale-110">
               <Navigation className="w-4 h-4" />
             </div>
             <input
@@ -282,14 +282,14 @@ export const RouteSearchForm: React.FC<RouteSearchFormProps> = ({
               }}
               onFocus={() => setActiveField('dest')}
               placeholder="e.g. Howrah Station, Kolkata"
-              className="glass-input w-full rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-rose-500/60 focus:ring-rose-500/20"
+              className="glass-input w-full rounded-xl pl-10 pr-4 py-2.5 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-rose-500/60 focus:ring-rose-500/20"
             />
           </div>
 
           {/* Destination Autocomplete Dropdown */}
           {activeField === 'dest' && (destSuggestions.length > 0 || destText.length === 0) && (
             <div className="absolute left-0 right-0 top-full mt-1.5 glass-panel-elevated rounded-xl shadow-2xl z-50 overflow-hidden py-1 border border-cyan-500/20">
-              <div className="px-3 py-1.5 text-[10px] uppercase font-bold text-slate-400 tracking-wider border-b border-white/[0.06]">
+              <div className="px-3 py-1.5 text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400 tracking-wider border-b border-slate-200 dark:border-white/[0.06]">
                 {destSuggestions.length > 0 ? 'Address Suggestions' : 'Popular Destinations'}
               </div>
               {(destSuggestions.length > 0 ? destSuggestions : POPULAR_PRESETS.slice(1, 4).map(p => p.label)).map((item, idx) => (
@@ -301,9 +301,9 @@ export const RouteSearchForm: React.FC<RouteSearchFormProps> = ({
                     setActiveField(null);
                     onSelectDestSuggestion?.(item);
                   }}
-                  className="w-full text-left px-3.5 py-2.5 text-xs text-slate-200 hover:bg-rose-500/15 hover:text-rose-200 flex items-center gap-2.5 transition-colors border-b border-white/[0.04] last:border-b-0"
+                  className="w-full text-left px-3.5 py-2.5 text-xs text-slate-800 dark:text-slate-200 hover:bg-rose-500/15 hover:text-rose-700 dark:hover:text-rose-200 flex items-center gap-2.5 transition-colors border-b border-slate-100 dark:border-white/[0.04] last:border-b-0"
                 >
-                  <Navigation className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                  <Navigation className="w-3.5 h-3.5 text-rose-500 dark:text-rose-400 shrink-0" />
                   <span className="truncate">{item}</span>
                 </button>
               ))}
@@ -314,10 +314,10 @@ export const RouteSearchForm: React.FC<RouteSearchFormProps> = ({
 
       {/* Travel Mode Pills */}
       <div className="relative z-10">
-        <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+        <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
           Travel Mode
         </label>
-        <div className="grid grid-cols-5 gap-1.5 bg-[#081024]/80 backdrop-blur-md p-1 rounded-xl border border-white/[0.08] shadow-inner">
+        <div className="grid grid-cols-5 gap-1.5 bg-slate-100/90 dark:bg-[#081024]/80 backdrop-blur-md p-1 rounded-xl border border-slate-200 dark:border-white/[0.08] shadow-inner">
           {travelModesList.map((mode) => {
             const Icon = mode.icon;
             const isSelected = travelMode === mode.id;
@@ -328,11 +328,11 @@ export const RouteSearchForm: React.FC<RouteSearchFormProps> = ({
                 onClick={() => setTravelMode(mode.id)}
                 className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg text-[11px] font-medium transition-all duration-200 ${
                   isSelected
-                    ? 'bg-cyan-500/20 text-cyan-200 border border-cyan-400/50 shadow-[0_0_12px_rgba(6,182,212,0.3)] font-semibold scale-[1.02]'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent'
+                    ? 'bg-cyan-500/20 text-cyan-800 dark:text-cyan-200 border border-cyan-400/50 shadow-sm font-semibold scale-[1.02]'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-200/50 dark:hover:bg-white/[0.04] border border-transparent'
                 }`}
               >
-                <Icon className={`w-4 h-4 mb-0.5 ${isSelected ? 'text-cyan-400' : 'text-slate-400'}`} />
+                <Icon className={`w-4 h-4 mb-0.5 ${isSelected ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-500 dark:text-slate-400'}`} />
                 <span className="truncate max-w-[54px]">{mode.label}</span>
               </button>
             );
@@ -343,10 +343,10 @@ export const RouteSearchForm: React.FC<RouteSearchFormProps> = ({
       {/* Route Preference */}
       <div className="relative z-10">
         <div className="flex items-center justify-between mb-1.5">
-          <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+          <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
             Routing Preference
           </label>
-          <span className="text-[10px] text-cyan-400/90 font-mono">Affects Ranking</span>
+          <span className="text-[10px] text-cyan-600 dark:text-cyan-400/90 font-mono">Affects Ranking</span>
         </div>
         <div className="grid grid-cols-3 gap-2">
           {preferencesList.map((pref) => {
@@ -359,12 +359,12 @@ export const RouteSearchForm: React.FC<RouteSearchFormProps> = ({
                 onClick={() => setPreference(pref.id)}
                 className={`py-2.5 px-2.5 rounded-xl text-left border transition-all duration-200 ${
                   isSelected
-                    ? 'bg-cyan-500/15 border-cyan-400/60 text-cyan-200 shadow-[0_0_15px_rgba(6,182,212,0.2)]'
-                    : 'glass-card border-white/[0.06] text-slate-400 hover:border-white/15 hover:text-slate-300'
+                    ? 'bg-cyan-500/15 border-cyan-500/60 text-cyan-900 dark:text-cyan-200 shadow-sm'
+                    : 'glass-card border-slate-200 dark:border-white/[0.06] text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-white/15 hover:text-slate-900 dark:hover:text-slate-300'
                 }`}
               >
                 <div className="flex items-center gap-1.5 font-bold text-xs">
-                  <Icon className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-cyan-400' : 'text-slate-400'}`} />
+                  <Icon className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-500 dark:text-slate-400'}`} />
                   <span>{pref.label}</span>
                 </div>
                 <div className="text-[10px] opacity-75 mt-0.5 leading-tight truncate">

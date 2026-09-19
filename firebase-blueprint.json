@@ -75,6 +75,11 @@
         "confirmations": {
           "type": "number",
           "description": "Count of peer confirmations"
+        },
+        "photoUrl": {
+          "type": "string",
+          "description": "Optional URL or base64 data string of attached hazard photo",
+          "maxLength": 200000
         }
       },
       "required": [

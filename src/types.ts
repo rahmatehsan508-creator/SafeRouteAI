@@ -98,6 +98,7 @@ export interface CommunityReport {
   timestamp: number;
   status: ReportStatus;
   confirmations: number;
+  photoUrl?: string;
 }
 
 export interface SavedRoute {

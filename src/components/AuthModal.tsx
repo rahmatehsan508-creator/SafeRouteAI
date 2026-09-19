@@ -77,31 +77,31 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         <div className="absolute -top-20 -right-20 w-44 h-44 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-white/[0.08] relative z-10">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-white/[0.08] relative z-10">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.25)]">
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-700 dark:text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.25)]">
               <Shield className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-slate-100 drop-shadow-sm">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 drop-shadow-sm">
                 {isSignUp ? 'Create SafeRoute Account' : 'Sign In to SafeRoute'}
               </h2>
-              <p className="text-[10px] text-slate-400 font-light">
+              <p className="text-[10px] text-slate-600 dark:text-slate-400 font-light">
                 Sync saved routes & community hazard reports
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-slate-400 hover:text-slate-100 hover:bg-white/[0.08] rounded-xl transition-colors border border-transparent hover:border-white/10"
+            className="p-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-white/[0.08] rounded-xl transition-colors border border-transparent hover:border-slate-200 dark:hover:border-white/10"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         {errorMsg && (
-          <div className="glass-card bg-rose-500/15 border border-rose-400/40 rounded-xl p-3 text-xs text-rose-200 flex items-start gap-2 shadow-sm relative z-10">
-            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+          <div className="glass-card bg-rose-500/15 border border-rose-500/40 rounded-xl p-3 text-xs text-rose-900 dark:text-rose-200 flex items-start gap-2 shadow-sm relative z-10">
+            <AlertCircle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
             <span>{errorMsg}</span>
           </div>
         )}
@@ -109,7 +109,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         <form onSubmit={handleSubmit} className="space-y-3.5 relative z-10">
           {isSignUp && (
             <div>
-              <label className="block text-[10px] font-bold text-slate-300 mb-1 uppercase tracking-wider font-mono">
+              <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1 uppercase tracking-wider font-mono">
                 Full Name
               </label>
               <div className="relative flex items-center">
@@ -119,14 +119,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Alex Rivera"
-                  className="w-full glass-input rounded-xl pl-9 pr-3 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none font-light"
+                  className="w-full glass-input rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none font-light"
                 />
               </div>
             </div>
           )}
 
           <div>
-            <label className="block text-[10px] font-bold text-slate-300 mb-1 uppercase tracking-wider font-mono">
+            <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1 uppercase tracking-wider font-mono">
               Email Address
             </label>
             <div className="relative flex items-center">
@@ -137,13 +137,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@domain.com"
                 required
-                className="w-full glass-input rounded-xl pl-9 pr-3 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none font-light"
+                className="w-full glass-input rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none font-light"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-[10px] font-bold text-slate-300 mb-1 uppercase tracking-wider font-mono">
+            <label className="block text-[10px] font-bold text-slate-700 dark:text-slate-300 mb-1 uppercase tracking-wider font-mono">
               Password
             </label>
             <div className="relative flex items-center">
@@ -154,7 +154,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
-                className="w-full glass-input rounded-xl pl-9 pr-3 py-2 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none font-light"
+                className="w-full glass-input rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none font-light"
               />
             </div>
           </div>
@@ -176,19 +176,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </form>
 
         {/* Demo Credentials Helper */}
-        <div className="glass-card border border-white/[0.06] p-3 rounded-xl text-center space-y-1 relative z-10">
-          <div className="text-[10px] text-slate-400 font-light">Testing Firebase Authentication?</div>
+        <div className="glass-card border border-slate-200 dark:border-white/[0.06] p-3 rounded-xl text-center space-y-1 relative z-10">
+          <div className="text-[10px] text-slate-600 dark:text-slate-400 font-light">Testing Firebase Authentication?</div>
           <button
             type="button"
             onClick={handleDemoFill}
-            className="text-xs font-bold text-emerald-400 hover:text-emerald-300 hover:underline transition-colors"
+            className="text-xs font-bold text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 hover:underline transition-colors"
           >
             Fill Demo Credentials
           </button>
         </div>
 
         {/* Toggle between Sign In / Sign Up */}
-        <div className="text-center pt-1 text-xs text-slate-400 relative z-10 font-light">
+        <div className="text-center pt-1 text-xs text-slate-600 dark:text-slate-400 relative z-10 font-light">
           {isSignUp ? (
             <span>
               Already have an account?{' '}
@@ -198,7 +198,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   setIsSignUp(false);
                   setErrorMsg(null);
                 }}
-                className="text-emerald-400 font-bold hover:underline transition-colors"
+                className="text-emerald-700 dark:text-emerald-400 font-bold hover:underline transition-colors"
               >
                 Sign In
               </button>
@@ -212,7 +212,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   setIsSignUp(true);
                   setErrorMsg(null);
                 }}
-                className="text-emerald-400 font-bold hover:underline transition-colors"
+                className="text-emerald-700 dark:text-emerald-400 font-bold hover:underline transition-colors"
               >
                 Sign Up
               </button>

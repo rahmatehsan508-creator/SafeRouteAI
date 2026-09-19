@@ -1,5 +1,5 @@
 import { Coordinates, GeocodeLocation } from '../types';
-import { isValidCoordinate } from '../utils/coordinates';
+import { isValidCoordinate, calculateHaversineDistance } from '../utils/coordinates';
 
 // In-memory cache to avoid repeated geocoding requests for identical queries
 const geocodeCache = new Map<string, GeocodeLocation[]>();
@@ -61,58 +61,90 @@ export const POPULAR_PRESETS: { label: string; address: string; coords: Coordina
 ];
 
 /**
- * Searches for a location by text query.
+ * Searches for a location by text query with location biasing.
  * Uses local curated index first, then server `/api/geocode`, with fallback to OpenStreetMap Nominatim and Photon.
  */
-export async function geocodeAddress(queryText: string): Promise<GeocodeLocation[]> {
+export async function geocodeAddress(
+  queryText: string,
+  userCoords?: Coordinates | null
+): Promise<GeocodeLocation[]> {
   const trimmed = queryText.trim();
   if (!trimmed || trimmed.length < 2) {
     return [];
   }
 
-  const cacheKey = trimmed.toLowerCase();
+  const cacheKey = `${trimmed.toLowerCase()}_${userCoords ? `${userCoords.lat.toFixed(2)},${userCoords.lng.toFixed(2)}` : 'global'}`;
   if (geocodeCache.has(cacheKey)) {
     return geocodeCache.get(cacheKey)!;
   }
 
   // 1. Check exact or partial match in popular landmarks
   const presetMatches = POPULAR_PRESETS.filter(
-    p => p.label.toLowerCase().includes(cacheKey) || 
-         p.address.toLowerCase().includes(cacheKey) ||
-         cacheKey.includes(p.label.toLowerCase())
+    p => p.label.toLowerCase().includes(trimmed.toLowerCase()) || 
+         p.address.toLowerCase().includes(trimmed.toLowerCase()) ||
+         trimmed.toLowerCase().includes(p.label.toLowerCase())
   ).map(p => ({
     name: p.label,
     formattedAddress: p.address,
     coordinates: p.coords
   }));
 
-  if (presetMatches.length > 0) {
-    geocodeCache.set(cacheKey, presetMatches);
-    return presetMatches;
-  }
-
-  // 2. Try server-side proxy endpoint first (avoids CORS & rate limit)
+  // 2. Try Photon (Komoot OSM search API - excellent real-time autocomplete with location bias)
   try {
-    const resp = await fetch(`/api/geocode?q=${encodeURIComponent(trimmed)}`, {
-      headers: { 'Accept': 'application/json' }
-    });
-    if (resp.ok) {
-      const data = await resp.json();
-      if (Array.isArray(data) && data.length > 0) {
-        const results = normalizeNominatimResults(data);
+    const latParam = userCoords && isValidCoordinate(userCoords.lat, userCoords.lng) ? `&lat=${userCoords.lat}&lon=${userCoords.lng}` : '';
+    const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(trimmed)}&limit=6${latParam}`;
+    const photonResp = await fetch(photonUrl);
+    if (photonResp.ok) {
+      const pData = await photonResp.json();
+      if (pData?.features?.length > 0) {
+        const results: GeocodeLocation[] = [];
+        for (const feat of pData.features) {
+          const coords = feat.geometry?.coordinates; // Photon is [lng, lat]
+          if (Array.isArray(coords) && coords.length >= 2) {
+            const lng = Number(coords[0]);
+            const lat = Number(coords[1]);
+            if (isValidCoordinate(lat, lng)) {
+              const name = feat.properties?.name || feat.properties?.street || feat.properties?.city || trimmed;
+              const details = [
+                feat.properties?.street,
+                feat.properties?.district,
+                feat.properties?.city,
+                feat.properties?.state,
+                feat.properties?.country
+              ].filter(Boolean).filter((item, idx, arr) => arr.indexOf(item) === idx).join(', ');
+
+              results.push({
+                name,
+                formattedAddress: details ? (details.startsWith(name) ? details : `${name}, ${details}`) : name,
+                coordinates: { lat, lng }
+              });
+            }
+          }
+        }
         if (results.length > 0) {
+          // Sort by proximity if user coordinates provided
+          if (userCoords) {
+            results.sort((a, b) => {
+              const distA = calculateHaversineDistance(userCoords, a.coordinates);
+              const distB = calculateHaversineDistance(userCoords, b.coordinates);
+              return distA - distB;
+            });
+          }
           geocodeCache.set(cacheKey, results);
           return results;
         }
       }
     }
   } catch {
-    // Continue to direct geocoders
+    // Continue to next providers
   }
 
   // 3. Fallback direct to OpenStreetMap Nominatim
   try {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(trimmed)}&limit=5&addressdetails=1`;
+    const viewboxParam = userCoords && isValidCoordinate(userCoords.lat, userCoords.lng)
+      ? `&viewbox=${userCoords.lng - 0.8},${userCoords.lat + 0.8},${userCoords.lng + 0.8},${userCoords.lat - 0.8}`
+      : '';
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(trimmed)}&limit=6&addressdetails=1${viewboxParam}`;
     const response = await fetch(url, {
       headers: {
         'Accept': 'application/json'
@@ -130,49 +162,12 @@ export async function geocodeAddress(queryText: string): Promise<GeocodeLocation
       }
     }
   } catch {
-    // Fallback to Photon
+    // Continue
   }
 
-  // 4. Fallback to Photon (Komoot OSM search API)
-  try {
-    const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(trimmed)}&limit=5`;
-    const photonResp = await fetch(photonUrl);
-    if (photonResp.ok) {
-      const pData = await photonResp.json();
-      if (pData?.features?.length > 0) {
-        const results: GeocodeLocation[] = [];
-        for (const feat of pData.features) {
-          const coords = feat.geometry?.coordinates; // Photon is [lng, lat]
-          if (Array.isArray(coords) && coords.length >= 2) {
-            const lng = Number(coords[0]);
-            const lat = Number(coords[1]);
-            if (isValidCoordinate(lat, lng)) {
-              const name = feat.properties?.name || feat.properties?.street || trimmed;
-              const details = [
-                feat.properties?.city,
-                feat.properties?.state,
-                feat.properties?.country
-              ].filter(Boolean).join(', ');
-              results.push({
-                name,
-                formattedAddress: details ? `${name}, ${details}` : name,
-                coordinates: { lat, lng }
-              });
-            }
-          }
-        }
-        if (results.length > 0) {
-          geocodeCache.set(cacheKey, results);
-          return results;
-        }
-      }
-    }
-  } catch (err) {
-    console.warn('[Geocoding] All providers failed or offline:', err);
-  }
-
-  // If no external results but we had partial preset matches, return them
+  // 4. If no external results but we had partial preset matches, return them
   if (presetMatches.length > 0) {
+    geocodeCache.set(cacheKey, presetMatches);
     return presetMatches;
   }
 

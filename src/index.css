@@ -2,132 +2,353 @@
 
 @layer base {
   body {
-    @apply bg-[#050814] text-slate-100 antialiased selection:bg-cyan-500/30 selection:text-cyan-200 overflow-x-hidden;
+    @apply antialiased selection:bg-lime-500/30 selection:text-lime-700 overflow-x-hidden transition-colors duration-300;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 }
 
-/* Glassmorphism custom classes & effects */
+/* Glass panels defaults (Dark Theme) */
 .glass-panel {
-  background: rgba(10, 17, 34, 0.72);
+  background: rgba(15, 23, 42, 0.85);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(56, 189, 248, 0.12);
-  box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.1), 0 12px 36px 0 rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #f8fafc;
 }
 
 .glass-panel-elevated {
-  background: rgba(12, 20, 42, 0.85);
+  background: rgba(15, 23, 42, 0.92);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(56, 189, 248, 0.2);
-  box-shadow: inset 0 1px 2px 0 rgba(255, 255, 255, 0.18), 0 16px 48px 0 rgba(0, 0, 0, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f8fafc;
 }
 
 .glass-card {
-  background: rgba(13, 22, 45, 0.55);
+  background: rgba(15, 23, 42, 0.65);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.06), 0 6px 24px 0 rgba(0, 0, 0, 0.35);
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.glass-card:hover {
-  background: rgba(18, 30, 60, 0.7);
-  border-color: rgba(56, 189, 248, 0.3);
-  box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.12), 0 10px 30px -4px rgba(6, 182, 212, 0.2);
+  color: #f8fafc;
 }
 
 .glass-input {
-  background: rgba(4, 9, 22, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.4);
+  color: #f8fafc;
   transition: all 0.2s ease;
 }
 
 .glass-input:focus {
-  background: rgba(4, 9, 22, 0.95);
-  border-color: rgba(6, 182, 212, 0.7);
-  box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.4), 0 0 0 3px rgba(6, 182, 212, 0.2);
+  background: rgba(15, 23, 42, 0.9);
+  border-color: rgba(6, 182, 212, 0.5);
+  box-shadow: 0 0 15px rgba(6, 182, 212, 0.2);
 }
 
-.glass-chip {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+/* Standard Icon State Utilities */
+.icon-active {
+  color: #047857; /* emerald-700 (6.5:1 contrast vs white) */
 }
 
-/* Glow effects */
-.glow-cyan {
-  box-shadow: 0 0 20px rgba(6, 182, 212, 0.35);
+.dark .icon-active {
+  color: #34d399; /* emerald-400 */
 }
 
-.glow-amber {
-  box-shadow: 0 0 20px rgba(245, 158, 11, 0.35);
+.icon-secondary {
+  color: #475569; /* slate-600 (7.1:1 contrast vs white) */
 }
 
-.glow-violet {
-  box-shadow: 0 0 20px rgba(139, 92, 246, 0.35);
+.dark .icon-secondary {
+  color: #94a3b8; /* slate-400 */
+}
+
+.icon-disabled {
+  color: #94a3b8; /* slate-400 (3.0:1 contrast for disabled states) */
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.dark .icon-disabled {
+  color: #64748b; /* slate-500 */
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------- */
+/* Light Theme Overrides & WCAG Icon Contrast Rules              */
+/* ------------------------------------------------------------- */
+.light body, body.light, .light {
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+
+/* Light Theme Card & Container Surface Overrides */
+.light .courier-card {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.05), 0 1px 3px 0 rgba(0, 0, 0, 0.03) !important;
+  color: #0f172a !important;
+}
+
+.light .courier-card-active {
+  background: #ffffff !important;
+  border: 2px solid #059669 !important;
+  box-shadow: 0 20px 40px -10px rgba(16, 185, 129, 0.12), 0 2px 6px 0 rgba(0, 0, 0, 0.04) !important;
+  color: #0f172a !important;
+}
+
+.light .courier-rail {
+  background: #ffffff !important;
+  border-right: 1px solid #cbd5e1 !important;
+  box-shadow: 2px 0 16px rgba(0, 0, 0, 0.04) !important;
+}
+
+.light .courier-input {
+  background: #f8fafc !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+.light .courier-input:focus {
+  background: #ffffff !important;
+  border-color: #059669 !important;
+  box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.12) !important;
+}
+
+.light .glass-panel {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.06) !important;
+  color: #0f172a !important;
+}
+
+.light .glass-panel-elevated {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.1) !important;
+  color: #0f172a !important;
+}
+
+.light .glass-card {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04) !important;
+  color: #0f172a !important;
+}
+
+.light .glass-input {
+  background: #f8fafc !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+.light .glass-input::placeholder {
+  color: #64748b !important;
+}
+
+/* Light Mode Badges */
+.light .badge-lime {
+  background: #d9f99d;
+  color: #1a2e05;
+  border: 1px solid #bef264;
+}
+
+.light .badge-purple {
+  background: #f3e8ff;
+  color: #581c87;
+  border: 1px solid #e9d5ff;
+}
+
+/* ------------------------------------------------------------- */
+/* Light Mode WCAG Icon Color Scheme Corrections                */
+/* Prevents light/pastel SVG icons from washing out on white bg  */
+/* ------------------------------------------------------------- */
+
+/* Active / Primary Green & Emerald Icons */
+.light .text-emerald-300,
+.light .text-emerald-400,
+.light .text-emerald-500 {
+  color: #047857 !important; /* emerald-700 (6.5:1 WCAG contrast vs white) */
+}
+
+/* Active Cyan & Sky Icons */
+.light .text-cyan-300,
+.light .text-cyan-400,
+.light .text-cyan-500,
+.light .text-sky-300,
+.light .text-sky-400 {
+  color: #0e7490 !important; /* cyan-700 (6.1:1 WCAG contrast vs white) */
+}
+
+/* Active / Warning Amber & Yellow Icons */
+.light .text-amber-300,
+.light .text-amber-400,
+.light .text-amber-500,
+.light .text-yellow-400 {
+  color: #b45309 !important; /* amber-700 (6.8:1 WCAG contrast vs white) */
+}
+
+/* Active / Danger Rose & Red Icons */
+.light .text-rose-300,
+.light .text-rose-400,
+.light .text-rose-500,
+.light .text-red-400 {
+  color: #be123c !important; /* rose-700 (6.8:1 WCAG contrast vs white) */
+}
+
+/* Indigo & Purple Icons */
+.light .text-indigo-300,
+.light .text-indigo-400,
+.light .text-indigo-500 {
+  color: #4338ca !important; /* indigo-700 (6.1:1 WCAG contrast vs white) */
+}
+
+.light .text-purple-300,
+.light .text-purple-400 {
+  color: #6b21a8 !important; /* purple-800 (7.8:1 WCAG contrast vs white) */
+}
+
+/* Neutral & Secondary Icons (slate-300 and slate-400 on light bg) */
+.light svg.text-slate-400,
+.light svg.text-slate-300,
+.light .text-slate-400:not(:disabled):not(.disabled) {
+  color: #475569 !important; /* slate-600 (7.1:1 WCAG contrast vs white) */
+}
+
+.light svg.text-slate-500,
+.light .text-slate-500:not(:disabled):not(.disabled) {
+  color: #334155 !important; /* slate-700 (9.8:1 WCAG contrast vs white) */
+}
+
+/* Disabled Controls & Disabled Icons in Light Mode */
+.light :disabled,
+.light [disabled],
+.light .disabled,
+.light button:disabled svg,
+.light input:disabled ~ svg {
+  color: #94a3b8 !important; /* slate-400 (3.0:1 contrast - WCAG compliant for disabled states) */
+  opacity: 0.65 !important;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
+}
+
+.light :disabled .text-emerald-700,
+.light :disabled .text-cyan-700,
+.light :disabled .text-amber-700,
+.light :disabled .text-rose-700,
+.light :disabled svg {
+  color: #94a3b8 !important;
+  opacity: 0.65 !important;
+}
+
+/* Icon Containers in Light Mode */
+.light .bg-emerald-500\/15,
+.light .bg-emerald-500\/20,
+.light .bg-emerald-500\/30 {
+  background-color: rgba(16, 185, 129, 0.12) !important;
+  border-color: rgba(5, 150, 105, 0.35) !important;
+}
+
+.light .bg-cyan-500\/15,
+.light .bg-cyan-500\/20,
+.light .bg-cyan-500\/30 {
+  background-color: rgba(6, 182, 212, 0.12) !important;
+  border-color: rgba(14, 116, 144, 0.35) !important;
+}
+
+.light .bg-amber-500\/15,
+.light .bg-amber-500\/20,
+.light .bg-amber-500\/30 {
+  background-color: rgba(245, 158, 11, 0.12) !important;
+  border-color: rgba(180, 83, 9, 0.35) !important;
+}
+
+.light .bg-rose-500\/15,
+.light .bg-rose-500\/20,
+.light .bg-rose-500\/30 {
+  background-color: rgba(244, 63, 94, 0.12) !important;
+  border-color: rgba(190, 18, 60, 0.35) !important;
+}
+
+.light .bg-white\/10,
+.light .bg-white\/5,
+.light .bg-white\/\[0\.04\] {
+  background-color: rgba(241, 245, 249, 0.9) !important;
+  border-color: rgba(203, 213, 225, 0.8) !important;
+  color: #1e293b !important;
 }
 
 /* Custom modern scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
-::-webkit-scrollbar-track {
-  background: rgba(8, 13, 26, 0.6);
+.light ::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.03);
 }
 
-::-webkit-scrollbar-thumb {
-  background: rgba(56, 189, 248, 0.25);
+.light ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
   border-radius: 9999px;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(56, 189, 248, 0.45);
+.dark ::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.03);
 }
 
-/* Leaflet dark & glassmorphism popup overrides */
-.leaflet-popup-content-wrapper {
-  background: rgba(10, 18, 38, 0.92) !important;
-  backdrop-filter: blur(18px) !important;
-  -webkit-backdrop-filter: blur(18px) !important;
-  color: #f8fafc !important;
-  border: 1px solid rgba(56, 189, 248, 0.25) !important;
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 9999px;
+}
+
+/* Leaflet map theme overrides */
+.dark .leaflet-tile-pane {
+  filter: brightness(0.72) invert(1) contrast(1.7) hue-rotate(185deg) saturate(0.3);
+}
+
+.light .leaflet-tile-pane {
+  filter: none;
+}
+
+.light .leaflet-popup-content-wrapper {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border: 1px solid #cbd5e1 !important;
   border-radius: 16px !important;
-  box-shadow: 0 16px 40px 0 rgba(0, 0, 0, 0.7), inset 0 1px 1px 0 rgba(255, 255, 255, 0.2) !important;
-  padding: 4px !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.1) !important;
 }
 
-.leaflet-popup-tip {
-  background: rgba(10, 18, 38, 0.92) !important;
-  border: 1px solid rgba(56, 189, 248, 0.25) !important;
+.light .leaflet-popup-tip {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
 }
 
-.leaflet-popup-close-button {
-  color: #94a3b8 !important;
-  top: 8px !important;
-  right: 8px !important;
-  font-size: 14px !important;
+.light .leaflet-control-zoom a {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
 }
 
-.leaflet-tooltip {
-  background: rgba(10, 18, 38, 0.92) !important;
-  backdrop-filter: blur(14px) !important;
-  -webkit-backdrop-filter: blur(14px) !important;
+.light .leaflet-control-zoom a:hover {
+  background-color: #f8fafc !important;
+  color: #047857 !important;
+}
+
+.dark .leaflet-popup-content-wrapper {
+  background: rgba(15, 23, 42, 0.95) !important;
+  backdrop-filter: blur(18px) !important;
   color: #f8fafc !important;
-  border: 1px solid rgba(56, 189, 248, 0.25) !important;
-  border-radius: 12px !important;
-  box-shadow: 0 8px 24px 0 rgba(0, 0, 0, 0.5) !important;
-  padding: 6px 12px !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7) !important;
 }
 
-.leaflet-container {
-  font-family: inherit !important;
+.dark .leaflet-popup-tip {
+  background: rgba(15, 23, 42, 0.95) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
 }
+

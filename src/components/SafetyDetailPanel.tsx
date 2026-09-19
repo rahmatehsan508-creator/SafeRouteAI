@@ -153,11 +153,11 @@ export const SafetyDetailPanel: React.FC<SafetyDetailPanelProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-white/[0.08] relative z-10">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-[10px] uppercase font-mono tracking-wider text-cyan-400/80 font-bold">Selected Path:</span>
-            <span className="text-sm font-bold text-slate-100 truncate drop-shadow-sm">{route.name}</span>
+            <span className="text-[10px] uppercase font-mono tracking-wider text-cyan-600 dark:text-cyan-400/80 font-bold">Selected Path:</span>
+            <span className="text-sm font-bold text-slate-900 dark:text-slate-100 truncate drop-shadow-sm">{route.name}</span>
           </div>
-          <p className="text-[11px] text-slate-400 mt-0.5 font-light">
-            {route.distanceKm} km &bull; {route.durationFormatted} &bull; Mode: <span className="capitalize text-slate-300 font-medium">{travelMode.replace('_', ' ')}</span>
+          <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5 font-light">
+            {route.distanceKm} km &bull; {route.durationFormatted} &bull; Mode: <span className="capitalize text-slate-800 dark:text-slate-300 font-medium">{travelMode.replace('_', ' ')}</span>
           </p>
         </div>
 
@@ -239,21 +239,21 @@ export const SafetyDetailPanel: React.FC<SafetyDetailPanelProps> = ({
       <div className="relative z-10 space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Sliders className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="text-xs font-bold text-slate-100 uppercase tracking-wider font-mono">
+            <Sliders className="w-3.5 h-3.5 text-cyan-500 dark:text-cyan-400" />
+            <span className="text-xs font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider font-mono">
               Safety Factor Breakdown (Points out of 100)
             </span>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setViewMode(viewMode === 'cards' ? 'bars' : 'cards')}
-              className="text-[10px] px-2 py-0.5 rounded-lg border border-white/10 hover:border-cyan-400/40 text-slate-300 hover:text-white transition-all"
+              className="text-[10px] px-2 py-0.5 rounded-lg border border-slate-200 dark:border-white/10 hover:border-cyan-500/40 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all"
             >
               {viewMode === 'cards' ? 'List View' : 'Card View'}
             </button>
             <button
               onClick={onOpenMethodology}
-              className="text-[11px] text-cyan-400 hover:text-cyan-300 hover:underline flex items-center gap-1 font-medium transition-colors"
+              className="text-[11px] text-cyan-600 hover:text-cyan-700 dark:text-cyan-400 dark:hover:text-cyan-300 hover:underline flex items-center gap-1 font-medium transition-colors"
             >
               Scoring Details &rarr;
             </button>
@@ -265,13 +265,13 @@ export const SafetyDetailPanel: React.FC<SafetyDetailPanelProps> = ({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
-              <span className="text-xs font-bold text-slate-200">Overall Route Safety Index</span>
+              <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Overall Route Safety Index</span>
             </div>
             <div className="flex items-baseline gap-1 font-mono">
-              <span className="text-lg font-black text-cyan-300 drop-shadow-[0_0_10px_rgba(6,182,212,0.5)]">
+              <span className="text-lg font-black text-cyan-600 dark:text-cyan-300 drop-shadow-[0_0_10px_rgba(6,182,212,0.5)]">
                 {safetyScore}
               </span>
-              <span className="text-xs font-bold text-slate-400">/ 100</span>
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400">/ 100</span>
               <span className="text-[10px] text-slate-500 ml-1">pts</span>
             </div>
           </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GpsLocation, NavigationProgress, RouteOption, TravelMode } from '../types';
+import { CommunityReport, GpsLocation, NavigationProgress, RouteOption, TravelMode } from '../types';
 import { formatDistance, formatDuration } from '../services/routing';
+import { calculateHaversineDistance } from '../utils/coordinates';
 import {
   CornerUpLeft,
   CornerUpRight,
@@ -22,7 +23,8 @@ import {
   ZoomIn,
   Compass,
   ArrowUpRight,
-  ArrowUpLeft
+  ArrowUpLeft,
+  BellRing
 } from 'lucide-react';
 
 interface NavigationOverlayProps {
@@ -38,6 +40,7 @@ interface NavigationOverlayProps {
   isRecalculating?: boolean;
   onSimulateMove?: (stepRatio: number) => void;
   onToggleZoom?: () => void;
+  reports?: CommunityReport[];
 }
 
 export const NavigationOverlay: React.FC<NavigationOverlayProps> = ({
@@ -51,14 +54,18 @@ export const NavigationOverlay: React.FC<NavigationOverlayProps> = ({
   onRecenter,
   onRecalculateRoute,
   isRecalculating = false,
-  onSimulateMove
+  onSimulateMove,
+  reports = []
 }) => {
   const [isVoiceEnabled, setIsVoiceEnabled] = useState<boolean>(true);
   const [speedUnit, setSpeedUnit] = useState<'km/h' | 'mph'>('km/h');
   const [isSimulating, setIsSimulating] = useState<boolean>(false);
   const simulationStepRef = useRef<number>(0);
   const simulationTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const lastSpokenStepRef = useRef<string | null>(null);
+  const lastSpokenMsgRef = useRef<string | null>(null);
+  const spokenReportIdsRef = useRef<Set<string>>(new Set());
+  const initialAnnouncedRef = useRef<boolean>(false);
+  const wasOffRouteRef = useRef<boolean>(false);
 
   const currentStep = progress?.currentStep;
   const nextStep = progress?.nextStep;
@@ -77,22 +84,73 @@ export const NavigationOverlay: React.FC<NavigationOverlayProps> = ({
   const etaDate = new Date(Date.now() + remainingSecs * 1000);
   const etaFormatted = etaDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-  // Voice Guidance (Text-to-Speech)
-  useEffect(() => {
+  // Helper to speak a phrase via Browser Text-To-Speech
+  const speakPhrase = (text: string, force = false) => {
     if (!isVoiceEnabled || typeof window === 'undefined' || !('speechSynthesis' in window)) return;
-    if (!currentStep) return;
+    if (!force && lastSpokenMsgRef.current === text) return;
+
+    lastSpokenMsgRef.current = text;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.lang = 'en-US';
+    window.speechSynthesis.speak(utterance);
+  };
+
+  // 1. Initial Navigation Start Speech
+  useEffect(() => {
+    if (!initialAnnouncedRef.current && route) {
+      initialAnnouncedRef.current = true;
+      const cleanDest = destinationName.replace(/^[📍🎯\s]+/, '');
+      const welcomeText = `Starting navigation to ${cleanDest || 'destination'}. Safest route selected with ${route.safetyScore} percent safety score.`;
+      speakPhrase(welcomeText, true);
+    }
+  }, [route?.id, destinationName]);
+
+  // 2. Off-Route Spoken Alert
+  useEffect(() => {
+    if (isOffRoute && !wasOffRouteRef.current) {
+      wasOffRouteRef.current = true;
+      speakPhrase("Off route detected. Recalculating safest route from your position.", true);
+    } else if (!isOffRoute && wasOffRouteRef.current) {
+      wasOffRouteRef.current = false;
+      speakPhrase("Back on safe corridor. Resuming turn by turn navigation.", true);
+    }
+  }, [isOffRoute]);
+
+  // 3. Proximity Voice Hazard Alert (When within 120m of a reported hazard)
+  useEffect(() => {
+    if (!progress?.currentCoords || reports.length === 0) return;
+
+    const userLat = progress.currentCoords.lat;
+    const userLng = progress.currentCoords.lng;
+
+    for (const rep of reports) {
+      if (spokenReportIdsRef.current.has(rep.id)) continue;
+
+      const distMeters = calculateHaversineDistance(
+        { lat: userLat, lng: userLng },
+        { lat: rep.latitude, lng: rep.longitude }
+      );
+
+      if (distMeters <= 120) {
+        spokenReportIdsRef.current.add(rep.id);
+        const hazardAlertText = `Caution: Approaching reported ${rep.category} zone ahead. ${rep.description.slice(0, 60)}.`;
+        speakPhrase(hazardAlertText, true);
+        break;
+      }
+    }
+  }, [progress?.currentCoords?.lat, progress?.currentCoords?.lng, reports]);
+
+  // 4. Turn-by-Turn Maneuver Voice Guidance
+  useEffect(() => {
+    if (!currentStep?.instruction) return;
+    if (isOffRoute) return;
 
     const speechText = currentStep.instruction;
-    if (speechText && speechText !== lastSpokenStepRef.current) {
-      lastSpokenStepRef.current = speechText;
-      window.speechSynthesis.cancel(); // Stop any pending utterances
-      const utterance = new SpeechSynthesisUtterance(speechText);
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-      utterance.lang = 'en-US';
-      window.speechSynthesis.speak(utterance);
-    }
-  }, [currentStep?.instruction, isVoiceEnabled]);
+    speakPhrase(speechText);
+  }, [currentStep?.instruction, isOffRoute]);
 
   // Clean up speech synthesis and simulation on unmount
   useEffect(() => {

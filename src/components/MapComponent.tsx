@@ -1,8 +1,9 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { CommunityReport, Coordinates, GpsLocation, RouteOption } from '../types';
-import { Locate, AlertTriangle, RotateCcw, Crosshair, Check, X, Lock, Unlock, Shield } from 'lucide-react';
+import { Locate, AlertTriangle, RotateCcw, Crosshair, Check, X, Lock, Unlock, Shield, ShieldCheck, Hospital, Sun, Video, Eye, Navigation, Layers, Zap } from 'lucide-react';
+import { getNearbySafeHavens, getSafetyZones, SafeHaven, SafetyZone } from '../safety/safeHavens';
 
 interface MapComponentProps {
   sourceCoords: Coordinates | null;
@@ -14,8 +15,8 @@ interface MapComponentProps {
   onMapClickToReport?: (coords: Coordinates) => void;
   isReportingMode?: boolean;
   isNavigating?: boolean;
-  currentGpsCoords?: Coordinates | null; // Compatibility with legacy coordinates
-  currentGpsLocation?: GpsLocation | null; // Full real GPS data
+  currentGpsCoords?: Coordinates | null;
+  currentGpsLocation?: GpsLocation | null;
   isFollowingLocation?: boolean;
   onUserManualPan?: () => void;
   onMyLocationClick?: () => void;
@@ -28,13 +29,12 @@ interface MapComponentProps {
   onLockLocation?: () => void;
   onUnlockLocation?: () => void;
   isLocked?: boolean;
+  theme?: 'light' | 'dark';
+  destinationName?: string;
+  onSetDestinationFromMap?: (name: string, coords: Coordinates) => void;
+  hoveredRouteId?: string | null;
 }
 
-/**
- * Creates HTML string for the GPS location indicator.
- * Displays a distinctive blue circular marker with pulsing halo,
- * and an directional cone/arrow when heading information is available from the device.
- */
 function createGpsMarkerHtml(heading: number | null, isCalibrated?: boolean): string {
   const hasHeading = heading !== null && !isNaN(heading);
 
@@ -53,13 +53,10 @@ function createGpsMarkerHtml(heading: number | null, isCalibrated?: boolean): st
   if (hasHeading) {
     return `
       <div class="relative w-11 h-11 flex items-center justify-center pointer-events-none select-none">
-        <!-- Direction cone beam rotated to match heading -->
         <div style="transform: rotate(${heading}deg); transform-origin: center center;" class="absolute inset-0 flex items-start justify-center">
           <div class="w-0 h-0 border-l-[7px] border-l-transparent border-r-[7px] border-r-transparent border-b-[14px] border-b-blue-600 drop-shadow-md -mt-1"></div>
         </div>
-        <!-- Pulsing radar ring -->
         <div class="absolute w-8 h-8 rounded-full bg-blue-500/25 animate-ping"></div>
-        <!-- Center dot casing -->
         <div class="w-5 h-5 rounded-full bg-white shadow-xl flex items-center justify-center z-10 border border-blue-200">
           <div class="w-3.5 h-3.5 rounded-full bg-blue-600 shadow-inner"></div>
         </div>
@@ -69,11 +66,8 @@ function createGpsMarkerHtml(heading: number | null, isCalibrated?: boolean): st
 
   return `
     <div class="relative w-11 h-11 flex items-center justify-center pointer-events-none select-none">
-      <!-- Pulsing radar ring -->
       <div class="absolute w-8 h-8 rounded-full bg-blue-500/30 animate-ping"></div>
-      <!-- Semi-transparent halo -->
       <div class="absolute w-6 h-6 rounded-full bg-blue-400/30"></div>
-      <!-- Center dot casing -->
       <div class="w-5 h-5 rounded-full bg-white shadow-xl flex items-center justify-center z-10 border border-blue-200">
         <div class="w-3.5 h-3.5 rounded-full bg-blue-600 shadow-inner"></div>
       </div>
@@ -104,16 +98,27 @@ export const MapComponent: React.FC<MapComponentProps> = ({
   onCancelCalibrationMode,
   onLockLocation,
   onUnlockLocation,
-  isLocked = false
+  isLocked = false,
+  theme = 'light',
+  destinationName,
+  onSetDestinationFromMap,
+  hoveredRouteId = null
 }) => {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
   const polylinesLayerGroupRef = useRef<L.LayerGroup | null>(null);
   const markersLayerGroupRef = useRef<L.LayerGroup | null>(null);
   const reportsLayerGroupRef = useRef<L.LayerGroup | null>(null);
   const gpsLayerGroupRef = useRef<L.LayerGroup | null>(null);
+  const safeHavensLayerGroupRef = useRef<L.LayerGroup | null>(null);
+  const safetyZonesLayerGroupRef = useRef<L.LayerGroup | null>(null);
 
-  // Persistent refs for smooth GPS marker updating without re-rendering layers
+  // Layer Visibility State
+  const [showSafetyZones, setShowSafetyZones] = useState<boolean>(true);
+  const [showSafeHavens, setShowSafeHavens] = useState<boolean>(true);
+
+  // Persistent refs for smooth GPS marker updating
   const userGpsMarkerRef = useRef<L.Marker | null>(null);
   const userAccuracyCircleRef = useRef<L.Circle | null>(null);
   const lastHeadingRef = useRef<number | null>(null);
@@ -133,7 +138,6 @@ export const MapComponent: React.FC<MapComponentProps> = ({
     if (!map) return;
 
     if (isNavigating && !prevNavigatingRef.current) {
-      // Zoom into street level (zoom 18) focused on user location or origin
       const targetLat = activeGpsLat ?? sourceCoords?.lat ?? (routes.find(r => r.id === selectedRouteId)?.coordinates[0][0] || routes[0]?.coordinates[0][0]);
       const targetLng = activeGpsLng ?? sourceCoords?.lng ?? (routes.find(r => r.id === selectedRouteId)?.coordinates[0][1] || routes[0]?.coordinates[0][1]);
 
@@ -156,42 +160,44 @@ export const MapComponent: React.FC<MapComponentProps> = ({
     if (!mapContainerRef.current) return;
 
     if (!mapInstanceRef.current) {
-      // Default center: Victoria Memorial, Kolkata [22.5448, 88.3426] or user's active GPS if available
-      const initialLat = activeGpsLat || sourceCoords?.lat || 22.5448;
-      const initialLng = activeGpsLng || sourceCoords?.lng || 88.3426;
+      const initialLat = activeGpsLat || sourceCoords?.lat || 59.3293;
+      const initialLng = activeGpsLng || sourceCoords?.lng || 18.0686;
 
       const map = L.map(mapContainerRef.current, {
         center: [initialLat, initialLng],
         zoom: 14,
         zoomControl: false,
-        attributionControl: true
+        attributionControl: false
       });
 
-      // Standard OpenStreetMap Tile Layer with correct attribution
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      const tileUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+      const tileLayer = L.tileLayer(tileUrl, {
         maxZoom: 19,
+        subdomains: ['a', 'b', 'c'],
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
       }).addTo(map);
 
-      // Custom positioned zoom control
+      tileLayerRef.current = tileLayer;
+
       L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-      // Detect manual map panning to stop auto-following location in navigation mode
       map.on('dragstart', () => {
         if (onUserManualPan) {
           onUserManualPan();
         }
       });
 
-      // Layer groups for organized lifecycle
+      // Layer groups for safety hierarchy
+      safetyZonesLayerGroupRef.current = L.layerGroup().addTo(map);
       polylinesLayerGroupRef.current = L.layerGroup().addTo(map);
+      safeHavensLayerGroupRef.current = L.layerGroup().addTo(map);
       markersLayerGroupRef.current = L.layerGroup().addTo(map);
       reportsLayerGroupRef.current = L.layerGroup().addTo(map);
       gpsLayerGroupRef.current = L.layerGroup().addTo(map);
 
       mapInstanceRef.current = map;
 
-      // Invalidate size on next ticks to ensure tiles render when container geometry settles
       const t1 = setTimeout(() => map.invalidateSize(), 50);
       const t2 = setTimeout(() => map.invalidateSize(), 250);
       const t3 = setTimeout(() => map.invalidateSize(), 600);
@@ -203,7 +209,6 @@ export const MapComponent: React.FC<MapComponentProps> = ({
       };
     }
 
-    // ResizeObserver to handle container flex / sidebar transitions
     const resizeObserver = new ResizeObserver(() => {
       if (mapInstanceRef.current) {
         mapInstanceRef.current.invalidateSize();
@@ -217,14 +222,14 @@ export const MapComponent: React.FC<MapComponentProps> = ({
     };
   }, []);
 
-  // Handle map resizing whenever navigating or route selection changes
+  // Invalidate map size on theme/state changes
   useEffect(() => {
-    if (mapInstanceRef.current) {
-      mapInstanceRef.current.invalidateSize();
-    }
-  }, [isNavigating, selectedRouteId, routes.length]);
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    map.invalidateSize();
+  }, [theme, isNavigating, selectedRouteId, routes.length]);
 
-  // Handle map clicks (Reporting incident OR Pinpoint Calibration)
+  // Handle map clicks
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
@@ -245,6 +250,324 @@ export const MapComponent: React.FC<MapComponentProps> = ({
       map.off('click', handleClick);
     };
   }, [isPinpointCalibrationMode, onCalibrateMapClick, onMapClickToReport]);
+
+  // Render Safety Zones (Heatmap circles)
+  // Render Safety Zones & Community Hazard Heatmap
+  useEffect(() => {
+    const zonesGroup = safetyZonesLayerGroupRef.current;
+    if (!zonesGroup) return;
+
+    zonesGroup.clearLayers();
+
+    if (!showSafetyZones || isNavigating) return;
+
+    const anchorCoords: Coordinates = {
+      lat: activeGpsLat || sourceCoords?.lat || (routes[0]?.coordinates[0][0]) || 22.5726,
+      lng: activeGpsLng || sourceCoords?.lng || (routes[0]?.coordinates[0][1]) || 88.3639
+    };
+
+    // 1. Base Macro Safety Zones
+    const zones = getSafetyZones(anchorCoords);
+
+    zones.forEach((zone) => {
+      let color = '#10b981'; // Emerald (high safety)
+      let fillColor = '#10b981';
+      let opacity = 0.05;
+
+      if (zone.level === 'moderate') {
+        color = '#06b6d4'; // Cyan
+        fillColor = '#06b6d4';
+        opacity = 0.04;
+      } else if (zone.level === 'caution') {
+        color = '#f59e0b'; // Amber
+        fillColor = '#f59e0b';
+        opacity = 0.06;
+      }
+
+      const circle = L.circle([zone.center.lat, zone.center.lng], {
+        radius: zone.radiusMeters,
+        color: color,
+        fillColor: fillColor,
+        fillOpacity: opacity,
+        weight: 1,
+        opacity: 0.25,
+        dashArray: zone.level === 'caution' ? '3, 6' : undefined
+      }).addTo(zonesGroup);
+
+      circle.bindTooltip(`
+        <div class="font-sans text-xs p-1">
+          <div class="font-bold flex items-center gap-1">
+            <span>🛡️ ${zone.name}</span>
+            <span class="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-100 font-bold">${zone.safetyRating}/100</span>
+          </div>
+          <div class="text-[11px] text-slate-500 mt-0.5">${zone.description}</div>
+        </div>
+      `, { sticky: true });
+    });
+
+    // 2. Community Hazard Heatmap Overlay (Firestore Reports + Demo Baseline)
+    reports.forEach((rep) => {
+      let heatColor = '#f59e0b'; // Amber default
+      let heatFill = '#f59e0b';
+      let baseRadius = 130 + Math.min(rep.confirmations * 15, 100);
+
+      if (rep.category === 'Reported Incident') {
+        heatColor = '#e11d48'; // Rose/Red hazard
+        heatFill = '#f43f5e';
+      } else if (rep.category === 'Poor Lighting') {
+        heatColor = '#6366f1'; // Indigo dark zone
+        heatFill = '#818cf8';
+      } else if (rep.category === 'Isolated Area') {
+        heatColor = '#a855f7'; // Purple isolation
+        heatFill = '#c084fc';
+      } else if (rep.category === 'Road Damage') {
+        heatColor = '#d97706'; // Amber road surface
+        heatFill = '#fbbf24';
+      }
+
+      // Outer heat aura
+      L.circle([rep.latitude, rep.longitude], {
+        radius: baseRadius * 1.5,
+        color: heatColor,
+        fillColor: heatFill,
+        fillOpacity: 0.08,
+        weight: 0,
+        interactive: false
+      }).addTo(zonesGroup);
+
+      // Core heat intensity ring
+      const heatCore = L.circle([rep.latitude, rep.longitude], {
+        radius: baseRadius * 0.7,
+        color: heatColor,
+        fillColor: heatFill,
+        fillOpacity: 0.22,
+        weight: 1.5,
+        opacity: 0.4,
+        dashArray: '2, 4'
+      }).addTo(zonesGroup);
+
+      heatCore.bindTooltip(`
+        <div class="font-sans text-xs p-1">
+          <div class="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+            <span>🔥 HAZARD HEATMAP ZONE</span>
+          </div>
+          <div class="font-bold text-slate-900 mt-0.5">${rep.category}</div>
+          <div class="text-[10px] text-slate-500 font-mono">${rep.confirmations} community confirmations &bull; ${rep.status}</div>
+        </div>
+      `, { sticky: true });
+    });
+  }, [showSafetyZones, isNavigating, activeGpsLat, activeGpsLng, sourceCoords, routes, reports]);
+
+  // Render 24/7 Safe Havens Markers
+  useEffect(() => {
+    const havensGroup = safeHavensLayerGroupRef.current;
+    if (!havensGroup) return;
+
+    havensGroup.clearLayers();
+
+    if (!showSafeHavens || isNavigating) return;
+
+    const anchorCoords: Coordinates = {
+      lat: activeGpsLat || sourceCoords?.lat || (routes[0]?.coordinates[0][0]) || 59.3293,
+      lng: activeGpsLng || sourceCoords?.lng || (routes[0]?.coordinates[0][1]) || 18.0686
+    };
+
+    const havens = getNearbySafeHavens(anchorCoords);
+
+    havens.forEach((haven) => {
+      let iconColor = 'bg-emerald-600';
+      let symbol = '🛡️';
+
+      if (haven.type === 'police') {
+        iconColor = 'bg-blue-600';
+        symbol = '👮';
+      } else if (haven.type === 'hospital') {
+        iconColor = 'bg-rose-600';
+        symbol = '🏥';
+      } else if (haven.type === 'pharmacy_247') {
+        iconColor = 'bg-emerald-600';
+        symbol = '💊';
+      } else if (haven.type === 'transit_hub') {
+        iconColor = 'bg-indigo-600';
+        symbol = '🚇';
+      } else if (haven.type === 'convenience_247') {
+        iconColor = 'bg-amber-600';
+        symbol = '🏪';
+      }
+
+      const havenIcon = L.divIcon({
+        className: 'custom-safe-haven-pin',
+        html: `
+          <div class="relative flex flex-col items-center group cursor-pointer opacity-75 hover:opacity-100 transition-opacity">
+            <div class="w-5 h-5 rounded-lg ${iconColor} border border-white/90 shadow-md flex items-center justify-center text-white text-[10px] transition-transform group-hover:scale-125">
+              <span>${symbol}</span>
+            </div>
+          </div>
+        `,
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
+      });
+
+      const popupHtml = `
+        <div class="font-sans text-xs text-slate-800 p-1.5 min-w-[200px]">
+          <div class="flex items-center justify-between gap-1 mb-1">
+            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 uppercase tracking-wider">
+              24/7 Verified Safe Haven
+            </span>
+            ${haven.phone ? `<span class="text-[10px] font-mono font-bold text-slate-500">📞 ${haven.phone}</span>` : ''}
+          </div>
+          <strong class="text-slate-900 font-bold block text-sm">${haven.name}</strong>
+          <p class="text-slate-600 text-[11px] mt-1">${haven.address}</p>
+        </div>
+      `;
+
+      L.marker([haven.coordinates.lat, haven.coordinates.lng], { icon: havenIcon })
+        .bindPopup(popupHtml)
+        .addTo(havensGroup);
+    });
+  }, [showSafeHavens, isNavigating, activeGpsLat, activeGpsLng, sourceCoords, routes]);
+
+  // Update Route Polylines and Direct Safety Highlighting
+  useEffect(() => {
+    const polylinesGroup = polylinesLayerGroupRef.current;
+    const map = mapInstanceRef.current;
+    if (!polylinesGroup || !map) return;
+
+    polylinesGroup.clearLayers();
+
+    if (routes.length === 0) return;
+
+    // Identify highest safety route vs fastest
+    const safestRoute = [...routes].sort((a, b) => b.safetyScore - a.safetyScore)[0];
+    const fastestRoute = [...routes].sort((a, b) => a.durationSeconds - b.durationSeconds)[0];
+
+    // Render non-selected & non-hovered routes first, then selected, then hovered on top
+    const sortedRoutes = [...routes].sort((a, b) => {
+      if (a.id === hoveredRouteId) return 1;
+      if (b.id === hoveredRouteId) return -1;
+      if (a.id === selectedRouteId) return 1;
+      if (b.id === selectedRouteId) return -1;
+      return 0;
+    });
+
+    let selectedLatLngs: L.LatLng[] = [];
+
+    sortedRoutes.forEach((route) => {
+      const isSelected = route.id === selectedRouteId;
+      const isHovered = route.id === hoveredRouteId;
+      const isSafest = route.id === safestRoute?.id;
+      const isFastestOnly = route.id === fastestRoute?.id && route.safetyScore < 75;
+      const latLngs = route.coordinates.map(([lat, lng]) => L.latLng(lat, lng));
+
+      if (isSelected) {
+        selectedLatLngs = latLngs;
+      }
+
+      if (isNavigating && !isSelected) {
+        return;
+      }
+
+      // Safety color theme
+      let strokeColor = '#10b981'; // Emerald for Safe
+      if (route.safetyScore < 68) {
+        strokeColor = '#f59e0b'; // Amber for Caution/Fastest
+      } else if (route.safetyScore < 82) {
+        strokeColor = '#06b6d4'; // Cyan for Balanced
+      }
+
+      // Glowing outer casing for selected or hovered route
+      if (isSelected || isHovered) {
+        const casingColor = isHovered
+          ? (isSafest ? '#10b981' : isFastestOnly ? '#f59e0b' : '#06b6d4')
+          : (isSafest ? '#10b981' : isFastestOnly ? '#f59e0b' : '#06b6d4');
+
+        L.polyline(latLngs, {
+          color: casingColor,
+          weight: isHovered ? 18 : 14,
+          opacity: isHovered ? 0.65 : 0.45,
+          lineCap: 'round',
+          lineJoin: 'round'
+        }).addTo(polylinesGroup);
+      }
+
+      // Main Route Line
+      const polyline = L.polyline(latLngs, {
+        color: (isSelected || isHovered) ? strokeColor : (theme === 'light' ? '#94a3b8' : '#475569'),
+        weight: isHovered ? 7.5 : isSelected ? 6.5 : 3.5,
+        opacity: (isSelected || isHovered) ? 1.0 : 0.35,
+        dashArray: (isFastestOnly && !isSelected && !isHovered) ? '4, 6' : undefined,
+        lineCap: 'round',
+        lineJoin: 'round'
+      }).addTo(polylinesGroup);
+
+      // Interactive click to select
+      polyline.on('click', () => {
+        if (!isNavigating && !isPinpointCalibrationMode) {
+          onSelectRoute(route.id);
+        }
+      });
+
+      polyline.bindTooltip(
+        `
+        <div class="text-xs font-sans">
+          <div class="font-bold flex items-center gap-1">
+            <span>${isSafest ? '🛡️ SAFEST PATH:' : isFastestOnly ? '⚡ FASTEST SHORTCUT:' : '🛣️ ROUTE:'}</span>
+            <span>${route.name}</span>
+          </div>
+          <div class="mt-0.5">Safety Score: <strong class="text-emerald-600">${route.safetyScore}/100</strong> &bull; ${route.durationFormatted}</div>
+        </div>
+      `,
+        { sticky: true }
+      );
+
+      // Add On-Route Midpoint Interactive Badge
+      if (latLngs.length > 4 && !isNavigating) {
+        const midIdx = Math.floor(latLngs.length / 2);
+        const midPoint = latLngs[midIdx];
+
+        const badgeHtml = isHovered
+          ? `
+            <div class="cursor-pointer shadow-2xl rounded-full px-3 py-1 text-[11px] font-black border flex items-center gap-1.5 whitespace-nowrap bg-gradient-to-r from-emerald-600 to-cyan-600 text-white border-white ring-4 ring-cyan-400/80 scale-110 z-50 animate-pulse">
+              <span>🔍 PREVIEW: ${route.safetyScore}% Safe</span>
+              <span class="opacity-90 font-mono text-[10px] font-normal">(${route.durationFormatted})</span>
+            </div>
+          `
+          : isSelected
+          ? (isSafest ? `
+            <div class="cursor-pointer shadow-xl rounded-full px-2.5 py-1 text-[11px] font-black border flex items-center gap-1.5 whitespace-nowrap bg-emerald-600 text-white border-emerald-300 ring-2 ring-emerald-400/50 scale-105 z-50">
+              <span>🛡️ ${route.safetyScore}% Safe</span>
+              <span class="opacity-90 font-mono text-[10px] font-normal">(${route.durationFormatted})</span>
+            </div>
+          ` : `
+            <div class="cursor-pointer shadow-xl rounded-full px-2.5 py-1 text-[11px] font-black border flex items-center gap-1.5 whitespace-nowrap bg-amber-500 text-slate-950 border-amber-300 ring-2 ring-amber-400/50 scale-105 z-50">
+              <span>⚡ ${route.safetyScore}% Safe</span>
+              <span class="opacity-90 font-mono text-[10px] font-normal">(${route.durationFormatted})</span>
+            </div>
+          `)
+          : `
+            <div class="cursor-pointer shadow-md rounded-full px-2 py-0.5 text-[10px] font-bold border flex items-center gap-1 whitespace-nowrap opacity-65 hover:opacity-100 transition-all bg-slate-900/90 text-slate-200 border-slate-700 hover:scale-105">
+              <span>${isSafest ? '🛡️' : '⚡'} ${route.safetyScore}%</span>
+              <span class="text-[9px] opacity-75">(${route.durationFormatted})</span>
+            </div>
+          `;
+
+        const badgeIcon = L.divIcon({
+          className: 'custom-route-badge',
+          html: badgeHtml,
+          iconSize: isHovered ? [130, 28] : isSelected ? [110, 26] : [75, 20],
+          iconAnchor: isHovered ? [65, 14] : isSelected ? [55, 13] : [37, 10]
+        });
+
+        const badgeMarker = L.marker(midPoint, { icon: badgeIcon, zIndexOffset: isHovered ? 2000 : isSelected ? 1000 : 100 }).addTo(polylinesGroup);
+        badgeMarker.on('click', () => onSelectRoute(route.id));
+      }
+    });
+
+    if (selectedLatLngs.length > 0 && !isNavigating) {
+      const bounds = L.latLngBounds(selectedLatLngs);
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+    }
+  }, [routes, selectedRouteId, hoveredRouteId, onSelectRoute, isNavigating, isPinpointCalibrationMode, theme]);
 
   // Update Source & Destination Markers
   useEffect(() => {
@@ -272,7 +595,7 @@ export const MapComponent: React.FC<MapComponentProps> = ({
       L.marker([sourceCoords.lat, sourceCoords.lng], { icon: sourceIcon })
         .bindPopup(`
           <div class="font-sans text-xs text-slate-800 p-1">
-            <strong class="text-emerald-700 font-semibold block text-sm">Origin (Source)</strong>
+            <strong class="text-emerald-700 font-semibold block text-sm">Origin</strong>
             <span>Lat: ${sourceCoords.lat.toFixed(4)}, Lng: ${sourceCoords.lng.toFixed(4)}</span>
           </div>
         `)
@@ -280,40 +603,42 @@ export const MapComponent: React.FC<MapComponentProps> = ({
     }
 
     if (destCoords) {
+      const labelText = destinationName || 'Destination';
       const destIcon = L.divIcon({
         className: 'custom-dest-pin',
         html: `
-          <div class="relative flex items-center justify-center">
-            <div class="w-8 h-8 rounded-full bg-rose-600 border-2 border-white shadow-lg flex items-center justify-center text-white text-xs font-bold">
-              B
+          <div class="relative flex flex-col items-center pointer-events-auto group">
+            <div class="bg-slate-900/90 text-white font-bold text-[10px] px-2 py-0.5 rounded-full shadow-lg border border-white/20 flex items-center gap-1 whitespace-nowrap mb-0.5 opacity-85 group-hover:opacity-100 transition-opacity">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+              <span class="truncate max-w-[110px]">${labelText}</span>
+            </div>
+            <div class="w-4 h-4 rounded-full bg-slate-950 dark:bg-emerald-500 border-2 border-white shadow-md flex items-center justify-center">
+              <div class="w-1.5 h-1.5 rounded-full bg-white dark:bg-slate-950"></div>
             </div>
           </div>
         `,
-        iconSize: [32, 32],
-        iconAnchor: [16, 16]
+        iconSize: [100, 36],
+        iconAnchor: [50, 36]
       });
 
       L.marker([destCoords.lat, destCoords.lng], { icon: destIcon })
         .bindPopup(`
-          <div class="font-sans text-xs text-slate-800 p-1">
-            <strong class="text-rose-700 font-semibold block text-sm">Destination</strong>
+          <div class="font-sans text-xs text-slate-800 dark:text-slate-100 p-1">
+            <strong class="text-slate-900 dark:text-white font-semibold block text-sm">${labelText}</strong>
             <span>Lat: ${destCoords.lat.toFixed(4)}, Lng: ${destCoords.lng.toFixed(4)}</span>
           </div>
         `)
         .addTo(markersGroup);
     }
-  }, [sourceCoords, destCoords, isNavigating]);
+  }, [sourceCoords, destCoords, isNavigating, destinationName]);
 
-  // --------------------------------------------------------------------------
-  // LIVE GPS LOCATION & ACCURACY CIRCLE UPDATE (Both normal and navigation modes)
-  // --------------------------------------------------------------------------
+  // LIVE GPS LOCATION & ACCURACY CIRCLE UPDATE
   useEffect(() => {
     const gpsGroup = gpsLayerGroupRef.current;
     const map = mapInstanceRef.current;
     if (!gpsGroup || !map) return;
 
     if (activeGpsLat === null || activeGpsLng === null) {
-      // Remove markers if location is no longer available
       if (userGpsMarkerRef.current) {
         gpsGroup.removeLayer(userGpsMarkerRef.current);
         userGpsMarkerRef.current = null;
@@ -325,10 +650,8 @@ export const MapComponent: React.FC<MapComponentProps> = ({
       return;
     }
 
-    // Leaflet requires [latitude, longitude]
     const latLng = L.latLng(activeGpsLat, activeGpsLng);
 
-    // 1. Update or create GPS accuracy circle
     if (activeAccuracy && activeAccuracy > 0 && !isCalibrated) {
       if (!userAccuracyCircleRef.current) {
         userAccuracyCircleRef.current = L.circle(latLng, {
@@ -348,7 +671,6 @@ export const MapComponent: React.FC<MapComponentProps> = ({
       userAccuracyCircleRef.current = null;
     }
 
-    // 2. Update or create dedicated GPS Position Marker with direction indicator
     const headingHasChanged = lastHeadingRef.current !== activeHeading;
 
     if (!userGpsMarkerRef.current || headingHasChanged) {
@@ -372,145 +694,26 @@ export const MapComponent: React.FC<MapComponentProps> = ({
       }).addTo(gpsGroup);
 
       const tooltipText = isCalibrated 
-        ? `🎯 Exact Calibrated Location` 
-        : `Your Live Location (Wi-Fi / Cell GPS${activeAccuracy ? ` · ±${Math.round(activeAccuracy)}m` : ''})`;
+        ? `🎯 Calibrated Location` 
+        : `Your Live Location (${activeAccuracy ? `±${Math.round(activeAccuracy)}m` : 'GPS'})`;
       
       userGpsMarkerRef.current.bindTooltip(tooltipText, {
         direction: 'top',
         offset: [0, -14]
       });
 
-      const popupHtml = `
-        <div style="font-family: system-ui, sans-serif; font-size: 12px; color: #0f172a; line-height: 1.5; min-width: 180px;">
-          <div style="font-weight: 700; color: #0284c7; margin-bottom: 4px; font-size: 13px; display: flex; align-items: center; gap: 6px;">
-            <span style="width: 8px; height: 8px; border-radius: 50%; background: #06b6d4; display: inline-block;"></span>
-            <span>${isCalibrated ? '🎯 Calibrated Spot' : 'Live Detected Location'}</span>
-          </div>
-          <div><strong>Latitude:</strong> ${activeGpsLat.toFixed(6)}</div>
-          <div><strong>Longitude:</strong> ${activeGpsLng.toFixed(6)}</div>
-          <div><strong>Accuracy:</strong> ${isCalibrated ? 'Exact' : activeAccuracy !== null ? `±${Math.round(activeAccuracy)} meters (Wi-Fi / Cell)` : 'Detecting...'}</div>
-        </div>
-      `;
-      userGpsMarkerRef.current.bindPopup(popupHtml);
-
       lastHeadingRef.current = activeHeading;
     } else {
-      // Smoothly update position without destroying marker or causing re-render
       userGpsMarkerRef.current.setLatLng(latLng);
-      const tooltipText = isCalibrated 
-        ? `🎯 Exact Calibrated Location` 
-        : `Your Live Location (Wi-Fi / Cell GPS${activeAccuracy ? ` · ±${Math.round(activeAccuracy)}m` : ''})`;
-      userGpsMarkerRef.current.setTooltipContent(tooltipText);
-
-      const popupHtml = `
-        <div style="font-family: system-ui, sans-serif; font-size: 12px; color: #0f172a; line-height: 1.5; min-width: 180px;">
-          <div style="font-weight: 700; color: #0284c7; margin-bottom: 4px; font-size: 13px; display: flex; align-items: center; gap: 6px;">
-            <span style="width: 8px; height: 8px; border-radius: 50%; background: #06b6d4; display: inline-block;"></span>
-            <span>${isCalibrated ? '🎯 Calibrated Spot' : 'Live Detected Location'}</span>
-          </div>
-          <div><strong>Latitude:</strong> ${activeGpsLat.toFixed(6)}</div>
-          <div><strong>Longitude:</strong> ${activeGpsLng.toFixed(6)}</div>
-          <div><strong>Accuracy:</strong> ${isCalibrated ? 'Exact' : activeAccuracy !== null ? `±${Math.round(activeAccuracy)} meters (Wi-Fi / Cell)` : 'Detecting...'}</div>
-        </div>
-      `;
-      userGpsMarkerRef.current.setPopupContent(popupHtml);
     }
 
-    // 3. Navigation Mode Follow or Initial Map Center
     if (isNavigating && isFollowingLocation) {
-      // In navigation mode with follow enabled, smoothly pan the map to keep user centered
       map.panTo(latLng, { animate: true, duration: 0.6 });
     } else if (!hasCenteredInitiallyRef.current && routes.length === 0 && !sourceCoords && !destCoords) {
-      // Center map on user once if no existing route or pins exist
       hasCenteredInitiallyRef.current = true;
-      map.setView(latLng, 16, { animate: true });
+      map.setView(latLng, 15, { animate: true });
     }
   }, [activeGpsLat, activeGpsLng, activeAccuracy, activeHeading, isCalibrated, isNavigating, isFollowingLocation, routes.length, sourceCoords, destCoords]);
-
-  // Update Route Polylines and Selection Highlighting
-  useEffect(() => {
-    const polylinesGroup = polylinesLayerGroupRef.current;
-    const map = mapInstanceRef.current;
-    if (!polylinesGroup || !map) return;
-
-    polylinesGroup.clearLayers();
-
-    if (routes.length === 0) return;
-
-    // Render non-selected routes first (underneath), then selected route on top
-    const sortedRoutes = [...routes].sort((a, b) => {
-      if (a.id === selectedRouteId) return 1;
-      if (b.id === selectedRouteId) return -1;
-      return 0;
-    });
-
-    let selectedLatLngs: L.LatLng[] = [];
-
-    sortedRoutes.forEach((route) => {
-      const isSelected = route.id === selectedRouteId;
-      const latLngs = route.coordinates.map(([lat, lng]) => L.latLng(lat, lng));
-
-      if (isSelected) {
-        selectedLatLngs = latLngs;
-      }
-
-      // If navigating, only show the selected route prominently and hide/dim alternatives
-      if (isNavigating && !isSelected) {
-        return;
-      }
-
-      // Color scheme based on safety score and selection
-      let strokeColor = '#059669'; // Emerald default for high safety (80+)
-      if (route.safetyScore < 65) {
-        strokeColor = '#e11d48'; // Rose for caution (<65)
-      } else if (route.safetyScore < 80) {
-        strokeColor = '#d97706'; // Amber for moderate safety (65-79)
-      }
-
-      // Outer casing for selected route
-      if (isSelected) {
-        L.polyline(latLngs, {
-          color: '#ffffff',
-          weight: 10,
-          opacity: 0.9,
-          lineCap: 'round',
-          lineJoin: 'round'
-        }).addTo(polylinesGroup);
-      }
-
-      const polyline = L.polyline(latLngs, {
-        color: isSelected ? strokeColor : '#94a3b8',
-        weight: isSelected ? 6 : 4,
-        opacity: isSelected ? 1.0 : 0.4,
-        dashArray: isSelected ? undefined : '5, 8',
-        lineCap: 'round',
-        lineJoin: 'round'
-      }).addTo(polylinesGroup);
-
-      // Interactive click to select route
-      polyline.on('click', () => {
-        if (!isNavigating && !isPinpointCalibrationMode) {
-          onSelectRoute(route.id);
-        }
-      });
-
-      polyline.bindTooltip(
-        `
-        <div class="text-xs font-sans">
-          <div class="font-bold">${route.name}</div>
-          <div>Safety Score: <strong>${route.safetyScore}/100</strong> &bull; ${route.durationFormatted}</div>
-        </div>
-      `,
-        { sticky: true }
-      );
-    });
-
-    // Auto-fit bounds strictly to the selected route if present and not currently navigating
-    if (selectedLatLngs.length > 0 && !isNavigating) {
-      const bounds = L.latLngBounds(selectedLatLngs);
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
-    }
-  }, [routes, selectedRouteId, onSelectRoute, isNavigating, isPinpointCalibrationMode]);
 
   // Update Community Report Markers
   useEffect(() => {
@@ -528,26 +731,31 @@ export const MapComponent: React.FC<MapComponentProps> = ({
       const reportIcon = L.divIcon({
         className: 'custom-report-pin',
         html: `
-          <div class="relative flex items-center justify-center">
-            <div class="w-6 h-6 rounded-full ${iconColor} border-2 border-white shadow-md flex items-center justify-center text-white text-[10px] font-bold">
+          <div class="relative flex items-center justify-center opacity-75 hover:opacity-100 transition-opacity">
+            <div class="w-4 h-4 rounded-full ${iconColor} border border-white shadow-sm flex items-center justify-center text-white text-[8px] font-bold">
               !
             </div>
           </div>
         `,
-        iconSize: [24, 24],
-        iconAnchor: [12, 12]
+        iconSize: [16, 16],
+        iconAnchor: [8, 8]
       });
 
       const popupHtml = `
-        <div class="font-sans text-xs text-slate-800 p-1">
+        <div class="font-sans text-xs text-slate-800 p-1 min-w-[200px]">
           <div class="flex items-center gap-1.5 mb-1">
             <span class="w-2 h-2 rounded-full ${iconColor}"></span>
-            <strong class="font-semibold">${rep.category}</strong>
+            <strong class="font-semibold text-slate-900">${rep.category}</strong>
           </div>
-          <p class="text-slate-600 text-[11px] mb-1">${rep.description}</p>
-          <div class="flex items-center justify-between text-[10px] text-slate-400 border-t border-slate-200 pt-1">
+          ${rep.photoUrl ? `
+            <div class="my-1.5 rounded-lg overflow-hidden border border-slate-200 shadow-sm">
+              <img src="${rep.photoUrl}" alt="Hazard photo" class="w-full h-24 object-cover" />
+            </div>
+          ` : ''}
+          <p class="text-slate-600 text-[11px] mb-1 leading-snug">${rep.description}</p>
+          <div class="flex items-center justify-between text-[10px] text-slate-500 border-t border-slate-200 pt-1 font-mono">
             <span>Status: ${rep.status}</span>
-            <span>${rep.confirmations} confirmed</span>
+            <span>${rep.confirmations} verified</span>
           </div>
         </div>
       `;
@@ -586,7 +794,7 @@ export const MapComponent: React.FC<MapComponentProps> = ({
     }
   };
 
-  // Dedicated "My Location" handler
+  // Center on My Location
   const handleCenterOnMyLocation = () => {
     const map = mapInstanceRef.current;
     if (!map) return;
@@ -603,27 +811,73 @@ export const MapComponent: React.FC<MapComponentProps> = ({
       if (gpsError) {
         alert(gpsError);
       } else {
-        alert('Detecting your GPS location. Please ensure location services and browser permissions are allowed.');
+        alert('Detecting your GPS location. Please ensure location services are enabled.');
       }
     }
   };
 
   return (
     <div className={`relative w-full h-full min-h-[500px] bg-slate-950 rounded-2xl overflow-hidden border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.6)] flex flex-col ${isPinpointCalibrationMode ? 'ring-2 ring-cyan-400 cursor-crosshair' : ''}`}>
-      {/* Map DOM Element */}
+      {/* Map DOM Canvas */}
       <div
         ref={mapContainerRef}
         className="w-full flex-1 min-h-[500px] z-0"
         style={{ minHeight: '500px', height: '100%', width: '100%' }}
       />
 
-      {/* Map Floating Notifications */}
+      {/* TOP-RIGHT ON-MAP SAFETY OVERLAYS BAR */}
+      <div className="absolute top-3 right-3 z-[400] flex items-center gap-1.5 pointer-events-auto bg-slate-950/85 backdrop-blur-md p-1.5 rounded-2xl border border-white/15 shadow-2xl">
+        <button
+          onClick={() => setShowSafetyZones(!showSafetyZones)}
+          className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+            showSafetyZones
+              ? 'bg-emerald-500 text-slate-950 shadow-md font-black'
+              : 'text-slate-400 hover:text-white bg-white/5'
+          }`}
+          title="Toggle Safety Heatmap Zones"
+        >
+          <ShieldCheck className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Safe Zones</span>
+        </button>
+
+        <button
+          onClick={() => setShowSafeHavens(!showSafeHavens)}
+          className={`px-2.5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+            showSafeHavens
+              ? 'bg-cyan-500 text-slate-950 shadow-md font-black'
+              : 'text-slate-400 hover:text-white bg-white/5'
+          }`}
+          title="Toggle 24/7 Safe Havens (Police, Hospital, Pharmacy)"
+        >
+          <Hospital className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Safe Havens</span>
+        </button>
+
+        <div className="w-[1px] h-5 bg-white/10 mx-0.5" />
+
+        <button
+          onClick={handleRecenterRoute}
+          className="p-1.5 rounded-xl text-slate-300 hover:text-white hover:bg-white/10 transition-colors"
+          title="Fit Route to Screen"
+        >
+          <RotateCcw className="w-4 h-4" />
+        </button>
+
+        <button
+          onClick={handleCenterOnMyLocation}
+          className="p-1.5 rounded-xl text-emerald-400 hover:text-emerald-300 hover:bg-white/10 transition-colors"
+          title="Center on My Location"
+        >
+          <Locate className="w-4 h-4" />
+        </button>
+      </div>
+
+      {/* TOP-LEFT NOTIFICATIONS / CALIBRATION BANNER */}
       <div className="absolute top-3 left-3 z-[400] flex flex-col gap-2 pointer-events-auto">
-        {/* Pinpoint Calibration Active Banner */}
         {isPinpointCalibrationMode && (
-          <div className="glass-panel bg-cyan-600/90 border border-cyan-400 text-white text-xs font-bold px-4 py-2.5 rounded-2xl shadow-[0_0_30px_rgba(6,182,212,0.6)] flex items-center gap-3 animate-pulse backdrop-blur-xl">
+          <div className="glass-panel bg-cyan-600/90 border border-cyan-400 text-white text-xs font-bold px-4 py-2.5 rounded-2xl shadow-xl flex items-center gap-3 animate-pulse backdrop-blur-xl">
             <Crosshair className="w-4 h-4 text-white shrink-0 animate-spin" />
-            <span>Click anywhere on the map or drag the blue marker to set your exact location</span>
+            <span>Click anywhere on the map to place your exact location</span>
             {onCancelCalibrationMode && (
               <button
                 onClick={onCancelCalibrationMode}
@@ -636,169 +890,12 @@ export const MapComponent: React.FC<MapComponentProps> = ({
         )}
 
         {isReportingMode && (
-          <div className="glass-panel bg-rose-500/80 border border-rose-400/50 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow-[0_0_20px_rgba(244,63,94,0.4)] flex items-center gap-2 animate-pulse">
+          <div className="glass-panel bg-rose-500/80 border border-rose-400/50 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow-lg flex items-center gap-2 animate-pulse">
             <AlertTriangle className="w-4 h-4 text-white" />
-            <span>Click anywhere on the map to pinpoint incident</span>
-          </div>
-        )}
-
-        {/* GPS Error Notification Banner */}
-        {gpsError && !isCalibrated && (
-          <div className="glass-card bg-amber-950/90 border border-amber-500/50 rounded-2xl p-3 shadow-2xl text-xs text-amber-200 flex items-start gap-2.5 max-w-sm backdrop-blur-xl">
-            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0">
-              <span className="font-bold block text-amber-300">Location Access</span>
-              <span className="text-[11px] leading-relaxed block text-amber-200/90 font-light">{gpsError}</span>
-            </div>
-            {onOpenCalibrationModal && (
-              <button
-                onClick={onOpenCalibrationModal}
-                className="px-2.5 py-1 bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-[10px] rounded-lg shadow transition-all shrink-0 flex items-center gap-1 hover:scale-105 active:scale-95"
-                title="Calibrate exact location"
-              >
-                <Crosshair className="w-3 h-3" />
-                <span>Calibrate</span>
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* GPS Live Status & Accuracy Card with Anti-Fluctuation Controls */}
-        {activeGpsLat !== null && activeGpsLng !== null && (
-          <div className="glass-card bg-slate-950/90 backdrop-blur-xl border border-white/15 rounded-2xl p-3 shadow-2xl text-xs text-slate-300 pointer-events-auto max-w-xs font-mono">
-            <div className="flex items-center justify-between gap-2 font-sans font-bold text-cyan-300 pb-1.5 mb-1.5 border-b border-white/[0.08]">
-              <div className="flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${isCalibrated || isLocked ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]' : 'bg-cyan-400 shadow-[0_0_8px_rgba(6,182,212,0.8)]'} animate-pulse`} />
-                <span className="text-xs font-mono tracking-tight">{isCalibrated || isLocked ? 'LOCKED PIN' : 'GPS FILTERED'}</span>
-              </div>
-              {isCalibrated || isLocked ? (
-                <div className="flex items-center gap-1">
-                  <span className="text-[10px] font-bold text-emerald-300 bg-emerald-500/20 border border-emerald-400/40 px-1.5 py-0.5 rounded font-sans flex items-center gap-1">
-                    <Lock className="w-2.5 h-2.5" />
-                    <span>Fixed</span>
-                  </span>
-                  {onUnlockLocation && (
-                    <button
-                      onClick={onUnlockLocation}
-                      className="text-[10px] font-bold text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 px-1.5 py-0.5 rounded border border-white/10 transition-colors cursor-pointer"
-                      title="Unlock GPS live stream"
-                    >
-                      <Unlock className="w-2.5 h-2.5" />
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="flex items-center gap-1.5">
-                  {onLockLocation && (
-                    <button
-                      onClick={onLockLocation}
-                      className="text-[10px] font-bold text-cyan-300 bg-cyan-600/30 hover:bg-cyan-500/50 border border-cyan-400/40 px-2 py-0.5 rounded font-sans transition-all hover:scale-105 active:scale-95 flex items-center gap-1 shadow"
-                      title="Freeze this location now so it won't fluctuate"
-                    >
-                      <Lock className="w-2.5 h-2.5" />
-                      <span>Lock Spot</span>
-                    </button>
-                  )}
-                  {activeAccuracy !== null && activeAccuracy > 150 ? (
-                    <button
-                      onClick={onOpenCalibrationModal}
-                      className="text-[10px] font-bold text-amber-300 bg-amber-500/25 hover:bg-amber-500/40 border border-amber-400/50 px-1.5 py-0.5 rounded font-sans transition-colors cursor-pointer flex items-center gap-1"
-                      title="Click to calibrate exact spot"
-                    >
-                      <span>Fix</span>
-                      <Crosshair className="w-2.5 h-2.5" />
-                    </button>
-                  ) : null}
-                </div>
-              )}
-            </div>
-            <div className="text-[11px] space-y-0.5 text-slate-300 font-light">
-              <div>Lat: <span className="text-slate-100 font-semibold">{activeGpsLat.toFixed(6)}</span></div>
-              <div>Lng: <span className="text-slate-100 font-semibold">{activeGpsLng.toFixed(6)}</span></div>
-              <div className="flex items-center justify-between pt-0.5">
-                <span>Accuracy: <strong className="text-emerald-300">{isCalibrated || isLocked ? 'Locked Exact' : activeAccuracy !== null ? `±${Math.round(activeAccuracy)}m` : 'N/A'}</strong></span>
-                {onOpenCalibrationModal && (
-                  <button
-                    onClick={onOpenCalibrationModal}
-                    className="text-[10px] text-cyan-400 hover:text-cyan-200 underline cursor-pointer font-sans"
-                  >
-                    Adjust
-                  </button>
-                )}
-              </div>
-            </div>
+            <span>Click on map to report safety hazard or dark zone</span>
           </div>
         )}
       </div>
-
-      {/* Bottom Map Controls: My Location, Calibrate & Fit Route */}
-      {!isNavigating && (
-        <div className="absolute bottom-4 left-4 z-[400] flex items-center gap-2 flex-wrap">
-          {/* Dedicated "My Location" Button */}
-          <button
-            onClick={handleCenterOnMyLocation}
-            className="glass-card bg-slate-900/80 hover:bg-slate-850 text-cyan-300 hover:text-cyan-200 border border-cyan-500/40 hover:border-cyan-400/70 px-3.5 py-2 rounded-xl text-xs font-bold backdrop-blur-xl shadow-[0_4px_20px_rgba(0,0,0,0.5)] flex items-center gap-2 transition-all hover:scale-105 active:scale-95"
-            title="Recenter on My Location"
-          >
-            <Locate className="w-4 h-4 text-cyan-400 animate-pulse" />
-            <span>My Location</span>
-          </button>
-
-          {/* Calibrate Exact Location Button */}
-          {onOpenCalibrationModal && (
-            <button
-              onClick={onOpenCalibrationModal}
-              className="glass-card bg-gradient-to-r from-cyan-950/80 to-blue-950/80 hover:from-cyan-900 hover:to-blue-900 text-cyan-300 hover:text-white border border-cyan-500/40 hover:border-cyan-400 px-3.5 py-2 rounded-xl text-xs font-bold backdrop-blur-xl shadow-[0_4px_20px_rgba(0,0,0,0.5)] flex items-center gap-2 transition-all hover:scale-105 active:scale-95"
-              title="Calibrate exact spot on map or address"
-            >
-              <Crosshair className="w-4 h-4 text-cyan-400" />
-              <span>Calibrate Spot</span>
-            </button>
-          )}
-
-          {/* Fit Route Bounds Button (if route exists) */}
-          {routes.length > 0 && (
-            <button
-              onClick={handleRecenterRoute}
-              className="glass-card bg-slate-900/80 hover:bg-slate-850 text-slate-200 hover:text-white border border-white/15 hover:border-white/30 px-3.5 py-2 rounded-xl text-xs font-semibold backdrop-blur-xl shadow-[0_4px_20px_rgba(0,0,0,0.5)] flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95"
-              title="Fit route to view"
-            >
-              <svg className="w-3.5 h-3.5 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-                <path d="M21 3v5h-5" />
-                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
-                <path d="M3 21v-5h5" />
-              </svg>
-              <span>Fit Route</span>
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Map Legend Overlay */}
-      {!isNavigating && (
-        <div className="absolute top-3 right-3 z-[400] glass-card bg-slate-950/80 backdrop-blur-xl border border-white/15 px-3 py-2.5 rounded-2xl text-[11px] text-slate-300 shadow-[0_10px_30px_rgba(0,0,0,0.5)] hidden sm:flex flex-col gap-1.5">
-          <div className="text-[9px] font-mono font-bold uppercase tracking-widest text-slate-400 pb-1 border-b border-white/[0.08]">
-            Safety Map Legend
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-3.5 h-1.5 bg-emerald-400 rounded-full shadow-[0_0_6px_rgba(16,185,129,0.8)] inline-block"></span>
-            <span className="text-slate-200 font-light">High Safety (80+)</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-3.5 h-1.5 bg-amber-400 rounded-full shadow-[0_0_6px_rgba(245,158,11,0.8)] inline-block"></span>
-            <span className="text-slate-200 font-light">Moderate (65-79)</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-3.5 h-1.5 bg-rose-400 rounded-full shadow-[0_0_6px_rgba(244,63,94,0.8)] inline-block"></span>
-            <span className="text-slate-200 font-light">Caution (&lt;65)</span>
-          </div>
-          <div className="flex items-center gap-2 pt-1 border-t border-white/[0.06]">
-            <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 border border-white inline-block shadow-[0_0_6px_rgba(6,182,212,0.8)]"></span>
-            <span className="text-slate-200 font-light">Your Location (Wi-Fi / Cell GPS)</span>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
